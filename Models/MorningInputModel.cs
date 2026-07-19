@@ -27,4 +27,9 @@ public sealed class MorningInputModel
             HungDate.ToDateTime(HungTime),
             DateTimeKind.Unspecified);
     }
+    public LocationInputModel Location { get; set; } = new();
+
+    public string? SelectedSourceId { get; set; }
+
+    public string? SelectedSourceName { get; set; }
 }

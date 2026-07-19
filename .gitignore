@@ -1,0 +1,91 @@
+# .NET byggartefaktar
+
+[Bb]in/
+[Oo]bj/
+artifacts/
+publish/
+
+# Visual Studio
+
+.vs/
+_.user
+_.rsuser
+_.suo
+_.userosscache
+\*.sln.docstates
+
+# Visual Studio Code
+
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# JetBrains Rider
+
+.idea/
+\*.sln.iml
+
+# macOS
+
+.DS*Store
+.AppleDouble
+.LSOverride
+.*\*
+
+# Windows
+
+Thumbs.db
+Desktop.ini
+
+# Loggar
+
+\*.log
+logs/
+
+# Testresultat og dekning
+
+TestResults/
+coverage/
+coverage.\*
+_.coverage
+_.coveragexml
+
+# NuGet
+
+_.nupkg
+_.snupkg
+packages/
+.nuget/
+
+# Lokale konfigurasjonsfiler og hemmelegheiter
+
+appsettings.Local.json
+appsettings._.Local.json
+secrets.json
+.env
+.env._
+!.env.example
+
+# Sertifikat og nøklar
+
+_.pfx
+_.p12
+_.pem
+_.key
+
+# Databasar og lokale datafiler
+
+_.db
+_.db-shm
+_.db-wal
+_.sqlite
+\*.sqlite3
+
+# Mellombelse filer
+
+_.tmp
+_.temp
+_.bak
+_.swp
+_.swo
+_~
