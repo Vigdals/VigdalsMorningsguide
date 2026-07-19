@@ -1,0 +1,741 @@
+:root {
+    color-scheme: light;
+
+    --page-background: #f3f0e8;
+    --page-background-deep: #e8e2d6;
+
+    --surface: #fffdf8;
+    --surface-muted: #f7f3ea;
+    --surface-strong: #eee8dc;
+
+    --forest-900: #1f352b;
+    --forest-800: #294639;
+    --forest-700: #365746;
+    --forest-600: #496c57;
+    --forest-100: #e7eee8;
+
+    --leather-700: #76543b;
+    --leather-600: #8b6547;
+
+    --text-primary: #20251f;
+    --text-secondary: #5d655d;
+    --text-muted: #747c74;
+
+    --border: #d8d1c3;
+    --border-light: #e7e1d7;
+
+    --success: #356848;
+    --success-background: #e4f0e7;
+
+    --warning: #8a6227;
+    --warning-background: #f8eed9;
+
+    --danger: #9d3f39;
+    --danger-background: #f8e6e3;
+
+    --info-background: #e5eff0;
+
+    --shadow-small:
+        0 4px 14px rgba(45, 39, 30, 0.07);
+
+    --shadow-medium:
+        0 12px 35px rgba(45, 39, 30, 0.1);
+
+    --radius-small: 0.55rem;
+    --radius-medium: 0.85rem;
+    --radius-large: 1.15rem;
+}
+
+html {
+    min-height: 100%;
+    font-size: 16px;
+    background: var(--page-background);
+}
+
+body {
+    min-height: 100vh;
+    margin: 0;
+
+    color: var(--text-primary);
+
+    background:
+        radial-gradient(
+            circle at 5% 0%,
+            rgba(73, 108, 87, 0.1),
+            transparent 30rem
+        ),
+        radial-gradient(
+            circle at 100% 10%,
+            rgba(139, 101, 71, 0.08),
+            transparent 28rem
+        ),
+        linear-gradient(
+            180deg,
+            #faf8f3 0,
+            var(--page-background) 30rem,
+            var(--page-background-deep) 100%
+        );
+
+    font-family:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+.site-main {
+    min-height: calc(100vh - 5rem);
+}
+
+.site-main > .container {
+    max-width: 1180px;
+}
+
+/*
+ * Footer
+ */
+
+.site-footer {
+    padding: 1.75rem 0 2rem;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.footer-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+}
+
+.footer-separator {
+    opacity: 0.6;
+}
+
+/*
+ * Topp
+ */
+
+.guide-header {
+    position: relative;
+    max-width: 860px;
+    padding-left: 1.25rem;
+}
+
+.guide-header::before {
+    position: absolute;
+    top: 0.3rem;
+    bottom: 0.25rem;
+    left: 0;
+
+    width: 4px;
+
+    border-radius: 99px;
+
+    background:
+        linear-gradient(
+            180deg,
+            var(--forest-700),
+            var(--leather-600)
+        );
+
+    content: "";
+}
+
+.guide-header .badge {
+    padding: 0.55rem 0.8rem;
+
+    color: var(--forest-800) !important;
+
+    border: 1px solid #b9c8bd;
+    background: var(--forest-100) !important;
+
+    font-weight: 750;
+    letter-spacing: 0.015em;
+}
+
+.guide-header h1 {
+    color: var(--forest-900);
+    letter-spacing: -0.04em;
+}
+
+.guide-header .lead {
+    max-width: 760px;
+    color: var(--text-secondary) !important;
+}
+
+/*
+ * Kort
+ */
+
+.guide-card,
+.card {
+    color: var(--text-primary);
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius-large);
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(255, 255, 255, 0.95),
+            rgba(255, 253, 248, 0.95)
+        );
+
+    box-shadow: var(--shadow-small);
+}
+
+.guide-card {
+    overflow: hidden;
+}
+
+.guide-card:hover {
+    box-shadow: var(--shadow-medium);
+}
+
+.guide-card-header {
+    padding: 1.35rem 1.5rem;
+
+    border-bottom: 1px solid var(--border-light);
+
+    background:
+        linear-gradient(
+            90deg,
+            rgba(231, 238, 232, 0.75),
+            rgba(240, 229, 217, 0.45)
+        );
+}
+
+.guide-card-body {
+    padding: 1.5rem;
+}
+
+.guide-card h2,
+.guide-card h3 {
+    color: var(--forest-900);
+}
+
+.text-body-secondary,
+.form-text,
+.text-muted {
+    color: var(--text-secondary) !important;
+}
+
+/*
+ * Skjema
+ */
+
+.form-label {
+    margin-bottom: 0.45rem;
+    color: var(--forest-900);
+}
+
+.form-control,
+.form-select {
+    min-height: 3.25rem;
+
+    color: var(--text-primary);
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius-small);
+
+    background-color: #ffffff;
+
+    box-shadow:
+        inset 0 1px 1px rgba(45, 39, 30, 0.025);
+
+    transition:
+        border-color 140ms ease,
+        box-shadow 140ms ease,
+        background-color 140ms ease;
+}
+
+.form-control:hover,
+.form-select:hover {
+    border-color: #a9b7aa;
+}
+
+.form-control:focus,
+.form-select:focus {
+    color: var(--text-primary);
+
+    border-color: var(--forest-600);
+    background-color: #ffffff;
+
+    box-shadow:
+        0 0 0 0.22rem rgba(73, 108, 87, 0.16);
+}
+
+.form-control::placeholder {
+    color: #91978f;
+}
+
+.form-control:disabled,
+.form-control[readonly] {
+    color: var(--text-secondary);
+    background: var(--surface-strong);
+}
+
+input[type="number"] {
+    font-variant-numeric: tabular-nums;
+}
+
+.input-group-text {
+    color: #ffffff;
+
+    border-color: var(--forest-700);
+    background: var(--forest-700);
+
+    font-weight: 800;
+}
+
+/*
+ * Knappar
+ */
+
+.btn {
+    border-radius: var(--radius-small);
+    font-weight: 750;
+
+    transition:
+        transform 140ms ease,
+        box-shadow 140ms ease,
+        background-color 140ms ease,
+        border-color 140ms ease;
+}
+
+.btn-primary {
+    color: #ffffff;
+
+    border-color: var(--forest-800);
+
+    background:
+        linear-gradient(
+            180deg,
+            var(--forest-700),
+            var(--forest-900)
+        );
+
+    box-shadow:
+        0 8px 20px rgba(31, 53, 43, 0.2);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    color: #ffffff;
+
+    border-color: var(--forest-900);
+
+    background:
+        linear-gradient(
+            180deg,
+            var(--forest-600),
+            var(--forest-800)
+        );
+
+    transform: translateY(-1px);
+
+    box-shadow:
+        0 11px 25px rgba(31, 53, 43, 0.26);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/*
+ * Estimert tid
+ */
+
+.remaining-time-card {
+    padding: 1.1rem 1.25rem;
+
+    color: var(--forest-900);
+
+    border: 1px solid #cfbda8;
+    border-left: 5px solid var(--leather-600);
+    border-radius: var(--radius-medium);
+
+    background:
+        linear-gradient(
+            120deg,
+            #fffdf8,
+            #f4eadf
+        );
+
+    box-shadow:
+        0 6px 18px rgba(78, 57, 39, 0.08);
+}
+
+.remaining-time-card-complete {
+    border-color: #b8d2bf;
+    border-left-color: var(--success);
+
+    background:
+        linear-gradient(
+            120deg,
+            #f8fcf8,
+            var(--success-background)
+        );
+}
+
+.remaining-time-label {
+    margin-bottom: 0.2rem;
+
+    color: var(--leather-700);
+
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.remaining-time-card-complete .remaining-time-label {
+    color: var(--success);
+}
+
+.remaining-time-value {
+    color: var(--forest-900);
+
+    font-size: clamp(1.45rem, 3vw, 1.9rem);
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+
+    font-variant-numeric: tabular-nums;
+}
+
+.remaining-time-description {
+    margin-top: 0.3rem;
+
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/*
+ * Oppsummeringskort
+ */
+
+.summary-card {
+    height: 100%;
+    padding: 1.05rem;
+
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-medium);
+
+    background:
+        linear-gradient(
+            145deg,
+            #ffffff,
+            var(--surface-muted)
+        );
+}
+
+.summary-card::before {
+    display: block;
+
+    width: 2.75rem;
+    height: 3px;
+    margin-bottom: 0.8rem;
+
+    border-radius: 99px;
+    background: var(--leather-600);
+
+    content: "";
+}
+
+.summary-label {
+    margin-bottom: 0.3rem;
+
+    color: var(--text-secondary);
+
+    font-size: 0.77rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.summary-value {
+    color: var(--forest-900);
+
+    font-size: clamp(1.25rem, 2vw, 1.65rem);
+    font-weight: 800;
+    line-height: 1.2;
+
+    font-variant-numeric: tabular-nums;
+}
+
+.summary-target {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 400;
+}
+
+.summary-subtext {
+    margin-top: 0.45rem;
+
+    color: var(--text-muted);
+    font-size: 0.84rem;
+}
+
+/*
+ * Detaljar
+ */
+
+.result-details dt {
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+.result-details dd {
+    color: var(--text-primary);
+}
+
+/*
+ * Framdrift
+ */
+
+.degree-progress,
+.progress {
+    height: 1.45rem;
+
+    overflow: hidden;
+
+    border: 1px solid var(--border);
+    border-radius: 999px;
+
+    background: var(--surface-strong);
+}
+
+.progress-bar {
+    color: #ffffff;
+
+    background:
+        linear-gradient(
+            90deg,
+            var(--leather-600),
+            var(--forest-600),
+            var(--forest-800)
+        );
+
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Varsel
+ */
+
+.alert {
+    border-width: 1px;
+    border-radius: var(--radius-medium);
+}
+
+.alert-info {
+    color: #29484d;
+    border-color: #b7cccf;
+    background: var(--info-background);
+}
+
+.alert-success {
+    color: #254d35;
+    border-color: #b8d2bf;
+    background: var(--success-background);
+}
+
+.alert-warning {
+    color: #6e4d1d;
+    border-color: #ddc89e;
+    background: var(--warning-background);
+}
+
+.alert-danger {
+    color: #79322d;
+    border-color: #e2bcb7;
+    background: var(--danger-background);
+}
+
+/*
+ * Badges
+ */
+
+.badge.text-bg-primary {
+    color: var(--forest-800) !important;
+
+    border: 1px solid #b9c8bd;
+    background: var(--forest-100) !important;
+}
+
+.badge.text-bg-success {
+    color: var(--success) !important;
+
+    border: 1px solid #bad0bf;
+    background: var(--success-background) !important;
+}
+
+/*
+ * Tabell
+ */
+
+.table-responsive {
+    scrollbar-color:
+        #b8b0a2
+        transparent;
+}
+
+.table {
+    --bs-table-color: var(--text-primary);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--border-light);
+    --bs-table-hover-color: var(--text-primary);
+    --bs-table-hover-bg: rgba(73, 108, 87, 0.055);
+
+    margin-bottom: 0;
+}
+
+.table-light {
+    --bs-table-color: var(--forest-900);
+    --bs-table-bg: var(--surface-muted);
+    --bs-table-border-color: var(--border-light);
+}
+
+.day-table thead th {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+
+    color: var(--forest-900);
+
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.day-table tbody td {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    vertical-align: middle;
+}
+
+/*
+ * Validering
+ */
+
+.field-validation-error,
+.validation-summary-errors {
+    color: var(--danger);
+}
+
+.input-validation-error {
+    border-color: var(--danger);
+}
+
+.input-validation-error:focus {
+    border-color: var(--danger);
+
+    box-shadow:
+        0 0 0 0.22rem rgba(157, 63, 57, 0.14);
+}
+
+/*
+ * Lenker og fokus
+ */
+
+a {
+    color: var(--forest-700);
+}
+
+a:hover {
+    color: var(--forest-900);
+}
+
+:focus-visible {
+    outline: 3px solid rgba(180, 119, 53, 0.7);
+    outline-offset: 3px;
+}
+
+/*
+ * Responsivitet
+ */
+
+@media (max-width: 991.98px) {
+    .site-main > .container {
+        padding-right: 1rem;
+        padding-left: 1rem;
+    }
+
+    .guide-card-header,
+    .guide-card-body {
+        padding: 1.25rem;
+    }
+
+    .calculate-button {
+        margin-top: 0.25rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    html {
+        font-size: 15px;
+    }
+
+    .container {
+        padding-right: 0.85rem;
+        padding-left: 0.85rem;
+    }
+
+    .guide-header {
+        margin-bottom: 1.75rem !important;
+        padding-left: 1rem;
+    }
+
+    .guide-header h1 {
+        font-size: 2.15rem;
+    }
+
+    .guide-card {
+        border-radius: 0.9rem;
+    }
+
+    .guide-card-header,
+    .guide-card-body {
+        padding: 1rem;
+    }
+
+    .remaining-time-card {
+        padding: 1rem;
+    }
+
+    .remaining-time-value {
+        font-size: 1.5rem;
+    }
+
+    .summary-value {
+        font-size: 1.35rem;
+    }
+
+    .site-footer {
+        padding-bottom:
+            calc(1.5rem + env(safe-area-inset-bottom));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
