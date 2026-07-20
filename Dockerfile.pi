@@ -1,0 +1,19 @@
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ENV ASPNETCORE_URLS=http://0.0.0.0:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+
+COPY ./publish/ ./
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
+
+ENTRYPOINT ["dotnet", "VigdalsMorningsguide.dll"]

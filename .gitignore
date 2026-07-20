@@ -63,6 +63,9 @@ appsettings.Local.json
 appsettings._.Local.json
 secrets.json
 .env
+publish/
+bin/
+obj/
 .env._
 !.env.example
 

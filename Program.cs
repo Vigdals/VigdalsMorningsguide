@@ -113,4 +113,13 @@ app.MapControllerRoute(
     pattern:
         "{controller=Morning}/{action=Index}/{id?}");
 
+app.MapGet(
+    "/healthz",
+    () => Results.Ok(
+        new
+        {
+            status = "healthy",
+            service = "VigdalsMorningsguide"
+        }));
+
 app.Run();
