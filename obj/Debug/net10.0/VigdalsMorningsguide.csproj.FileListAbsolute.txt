@@ -120,7 +120,6 @@
 /Users/adrianvigdal/GitHub/VigdalsMorningsguide/obj/Debug/net10.0/scopedcss/Views/Shared/_Layout.cshtml.rz.scp.css
 /Users/adrianvigdal/GitHub/VigdalsMorningsguide/obj/Debug/net10.0/scopedcss/bundle/VigdalsMorningsguide.styles.css
 /Users/adrianvigdal/GitHub/VigdalsMorningsguide/obj/Debug/net10.0/scopedcss/projectbundle/VigdalsMorningsguide.bundle.scp.css
-/Users/adrianvigdal/GitHub/VigdalsMorningsguide/obj/Debug/net10.0/compressed/ecvquov12o-{0}-jg3mc9u5wo-jg3mc9u5wo.gz
 /Users/adrianvigdal/GitHub/VigdalsMorningsguide/obj/Debug/net10.0/compressed/17lq6tedit-{0}-xwpev6vzmf-xwpev6vzmf.gz
 /Users/adrianvigdal/GitHub/VigdalsMorningsguide/obj/Debug/net10.0/compressed/y3n59agvcz-{0}-6sx6pifph3-6sx6pifph3.gz
 /Users/adrianvigdal/GitHub/VigdalsMorningsguide/obj/Debug/net10.0/compressed/30s90kybp6-{0}-i8c33zkqon-i8c33zkqon.gz
@@ -195,3 +194,4 @@
 /Users/adrianvigdal/GitHub/VigdalsMorningsguide/obj/Debug/net10.0/VigdalsMorningsguide.pdb
 /Users/adrianvigdal/GitHub/VigdalsMorningsguide/obj/Debug/net10.0/VigdalsMorningsguide.genruntimeconfig.cache
 /Users/adrianvigdal/GitHub/VigdalsMorningsguide/obj/Debug/net10.0/ref/VigdalsMorningsguide.dll
+/Users/adrianvigdal/GitHub/VigdalsMorningsguide/obj/Debug/net10.0/compressed/ecvquov12o-{0}-0534050ez0-0534050ez0.gz

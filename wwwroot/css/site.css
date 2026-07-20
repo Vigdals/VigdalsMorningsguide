@@ -124,6 +124,51 @@ body {
  * Topp
  */
 
+.guide-header-with-antlers {
+    position: relative;
+
+    display: flex;
+    align-items: center;
+
+    min-height: 10.5rem;
+    max-width: 100%;
+    padding-top: 1.25rem;
+    padding-right: 18rem;
+    padding-bottom: 1.25rem;
+
+    overflow: hidden;
+}
+
+.guide-header-content {
+    position: relative;
+    z-index: 2;
+}
+
+.guide-antlers {
+    position: absolute;
+    top: 50%;
+    right: 1.5rem;
+
+    z-index: 1;
+
+    width: 16rem;
+    max-height: 10rem;
+
+    object-fit: contain;
+
+    opacity: 0.32;
+
+    transform: translateY(-50%);
+
+    filter:
+        sepia(0.18)
+        saturate(0.85)
+        contrast(0.95);
+
+    pointer-events: none;
+    user-select: none;
+}
+
 .guide-header {
     position: relative;
     max-width: 860px;
