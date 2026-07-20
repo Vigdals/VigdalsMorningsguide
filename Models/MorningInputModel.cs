@@ -14,6 +14,11 @@ public sealed class MorningInputModel
     public TimeOnly HungTime { get; set; } =
         TimeOnly.FromDateTime(DateTime.Now);
 
+    [Display(Name = "Målestasjon")]
+    [Required(ErrorMessage = "Du må velje målestasjon.")]
+    public string SelectedSourceId { get; set; } =
+        WeatherStationCatalog.DefaultSourceId;
+
     [Display(Name = "Mål for døgngrader")]
     [Range(
         1,
@@ -27,9 +32,4 @@ public sealed class MorningInputModel
             HungDate.ToDateTime(HungTime),
             DateTimeKind.Unspecified);
     }
-    public LocationInputModel Location { get; set; } = new();
-
-    public string? SelectedSourceId { get; set; }
-
-    public string? SelectedSourceName { get; set; }
 }

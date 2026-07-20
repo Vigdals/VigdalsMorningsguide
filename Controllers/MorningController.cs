@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using VigdalsMorningsguide.Models;
 using VigdalsMorningsguide.Services;
 
@@ -7,34 +8,47 @@ namespace VigdalsMorningsguide.Controllers;
 public sealed class MorningController : Controller
 {
     private readonly FrostService _frostService;
+    private readonly FrostStationService _stationService;
     private readonly ILogger<MorningController> _logger;
 
     public MorningController(
         FrostService frostService,
+        FrostStationService stationService,
         ILogger<MorningController> logger)
     {
         _frostService = frostService;
+        _stationService = stationService;
         _logger = logger;
     }
 
     [HttpGet]
-    [HttpGet]
     public IActionResult Index()
     {
-        var defaultTime = DateTime.Now.AddDays(-2);
+        var defaultTime =
+            DateTime.Now.AddDays(-2);
 
-        return View(
+        var model =
             new MorningPageViewModel
             {
                 Input = new MorningInputModel
                 {
-                    HungDate = DateOnly.FromDateTime(defaultTime),
-                    HungTime = new TimeOnly(
-                        defaultTime.Hour,
-                        defaultTime.Minute),
-                    TargetDegreeDays = 80
+                    HungDate =
+                        DateOnly.FromDateTime(defaultTime),
+
+                    HungTime =
+                        TimeOnly.FromDateTime(defaultTime),
+
+                    SelectedSourceId =
+                        WeatherStationCatalog.DefaultSourceId,
+
+                    TargetDegreeDays =
+                        80
                 }
-            });
+            };
+
+        PopulateStationOptions(model);
+
+        return View(model);
     }
 
     [HttpPost]
@@ -43,6 +57,8 @@ public sealed class MorningController : Controller
         MorningPageViewModel model,
         CancellationToken cancellationToken)
     {
+        PopulateStationOptions(model);
+
         if (!ModelState.IsValid)
         {
             return View(model);
@@ -50,12 +66,44 @@ public sealed class MorningController : Controller
 
         try
         {
-            var hungAt = model.Input.GetHungAt();
+            var selectedStation =
+                WeatherStationCatalog.Find(
+                    model.Input.SelectedSourceId);
 
-            model.Result = await _frostService.CalculateAsync(
-                hungAt,
-                model.Input.TargetDegreeDays,
-                cancellationToken);
+            if (selectedStation is null)
+            {
+                ModelState.AddModelError(
+                    "Input.SelectedSourceId",
+                    "Den valde målestasjonen finst ikkje.");
+
+                return View(model);
+            }
+
+            var hungAt =
+                model.Input.GetHungAt();
+
+            var station =
+                await _stationService.ResolveStationAsync(
+                    selectedStation,
+                    hungAt,
+                    cancellationToken);
+
+            if (station is null)
+            {
+                ModelState.AddModelError(
+                    "Input.SelectedSourceId",
+                    "Målestasjonen har ikkje gyldige " +
+                    "temperaturmålingar for perioden.");
+
+                return View(model);
+            }
+
+            model.Result =
+                await _frostService.CalculateAsync(
+                    hungAt,
+                    model.Input.TargetDegreeDays,
+                    station,
+                    cancellationToken);
 
             return View(model);
         }
@@ -68,7 +116,7 @@ public sealed class MorningController : Controller
         {
             _logger.LogWarning(
                 exception,
-                "Ugyldig opphengstidspunkt.");
+                "Ugyldige verdiar i mørningsskjemaet.");
 
             ModelState.AddModelError(
                 string.Empty,
@@ -80,7 +128,7 @@ public sealed class MorningController : Controller
         {
             _logger.LogError(
                 exception,
-                "Klarte ikkje å hente temperaturdata frå Frost.");
+                "Klarte ikkje å hente data frå Frost.");
 
             ModelState.AddModelError(
                 string.Empty,
@@ -100,5 +148,19 @@ public sealed class MorningController : Controller
 
             return View(model);
         }
+    }
+
+    private static void PopulateStationOptions(
+        MorningPageViewModel model)
+    {
+        model.StationOptions =
+            WeatherStationCatalog.Stations
+                .Select(station =>
+                    new SelectListItem
+                    {
+                        Value = station.SourceId,
+                        Text = station.DisplayName
+                    })
+                .ToList();
     }
 }

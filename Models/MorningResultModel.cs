@@ -6,9 +6,19 @@ public sealed class MorningResultModel
 
     public DateTime CalculatedAt { get; init; }
 
-    public string SourceId { get; init; } = string.Empty;
+    public string SourceId { get; init; } =
+        string.Empty;
 
-    public string SourceName { get; init; } = string.Empty;
+    public string SourceName { get; init; } =
+        string.Empty;
+
+    public double StationDistanceKilometres { get; init; }
+
+    public double StationLatitude { get; init; }
+
+    public double StationLongitude { get; init; }
+
+    public double? StationMetresAboveSeaLevel { get; init; }
 
     public double TargetDegreeDays { get; init; }
 
@@ -20,7 +30,8 @@ public sealed class MorningResultModel
 
     public double CoveragePercent { get; init; }
 
-    public IReadOnlyList<MorningDayModel> Days { get; init; } = [];
+    public IReadOnlyList<MorningDayModel> Days { get; init; } =
+        [];
 
     public TimeSpan ElapsedTime =>
         CalculatedAt > HungAt
@@ -37,14 +48,18 @@ public sealed class MorningResultModel
         ElapsedTime.Minutes;
 
     public double RemainingDegreeDays =>
-        Math.Max(0, TargetDegreeDays - TotalDegreeDays);
+        Math.Max(
+            0,
+            TargetDegreeDays - TotalDegreeDays);
 
     public double ProgressPercent =>
         TargetDegreeDays <= 0
             ? 0
             : Math.Min(
                 100,
-                TotalDegreeDays / TargetDegreeDays * 100);
+                TotalDegreeDays /
+                TargetDegreeDays *
+                100);
 
     public bool TargetReached =>
         TotalDegreeDays >= TargetDegreeDays;
@@ -58,10 +73,12 @@ public sealed class MorningResultModel
             : null;
 
     public int IncludedDayCount =>
-        Days.Count(day => day.IncludedInTotal);
+        Days.Count(day =>
+            day.IncludedInTotal);
 
     public int ExcludedDayCount =>
-        Days.Count(day => !day.IncludedInTotal);
+        Days.Count(day =>
+            !day.IncludedInTotal);
 }
 
 public sealed class MorningDayModel
@@ -86,5 +103,6 @@ public sealed class MorningDayModel
 
     public double AccumulatedDegreeDays { get; init; }
 
-    public IReadOnlyList<int> QualityCodes { get; init; } = [];
+    public IReadOnlyList<int> QualityCodes { get; init; } =
+        [];
 }

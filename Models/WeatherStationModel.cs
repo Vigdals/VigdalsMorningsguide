@@ -12,9 +12,20 @@ public sealed class WeatherStationModel
 
     public double DistanceKilometres { get; init; }
 
-    public string ElementId { get; init; } = "air_temperature";
+    public double? MetresAboveSeaLevel { get; init; }
 
-    public string TimeResolution { get; init; } = string.Empty;
+    public string ElementId { get; init; } =
+        "air_temperature";
+
+    public string TimeOffset { get; init; } =
+        "PT0H";
+
+    public string TimeResolution { get; init; } =
+        "PT10M";
+
+    public int TimeSeriesId { get; init; }
+
+    public double? Level { get; init; }
 
     public DateTimeOffset ValidFrom { get; init; }
 

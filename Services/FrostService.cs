@@ -36,8 +36,13 @@ public sealed class FrostService
     public async Task<MorningResultModel> CalculateAsync(
         DateTime hungAt,
         double targetDegreeDays,
+        WeatherStationModel station,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(station);
+
+        ValidateConfiguration();
+        ValidateStation(station);
 
         if (targetDegreeDays is < 1 or > 300)
         {
@@ -45,69 +50,77 @@ public sealed class FrostService
                 nameof(targetDegreeDays),
                 "Målet må vere mellom 1 og 300 døgngrader.");
         }
-        ValidateConfiguration();
 
         /*
          * datetime-local frå nettlesaren inneheld ikkje tidssone.
          * Me tolkar verdien som norsk lokal tid.
          */
-        var hungAtLocal = DateTime.SpecifyKind(
-            hungAt,
-            DateTimeKind.Unspecified);
+        var hungAtLocal =
+            DateTime.SpecifyKind(
+                hungAt,
+                DateTimeKind.Unspecified);
 
-        var nowUtc = DateTimeOffset.UtcNow;
+        var nowUtc =
+            DateTimeOffset.UtcNow;
 
-        var nowLocalOffset = TimeZoneInfo.ConvertTime(
-            nowUtc,
-            NorwegianTimeZone);
+        var nowLocalOffset =
+            TimeZoneInfo.ConvertTime(
+                nowUtc,
+                NorwegianTimeZone);
 
-        var nowLocal = DateTime.SpecifyKind(
-            nowLocalOffset.DateTime,
-            DateTimeKind.Unspecified);
+        var nowLocal =
+            DateTime.SpecifyKind(
+                nowLocalOffset.DateTime,
+                DateTimeKind.Unspecified);
 
         ValidateHungAt(
             hungAtLocal,
             nowLocal);
 
-        var hungAtUtcDateTime =
-            TimeZoneInfo.ConvertTimeToUtc(
-                hungAtLocal,
-                NorwegianTimeZone);
-
-        var hungAtUtc = new DateTimeOffset(
-            hungAtUtcDateTime,
-            TimeSpan.Zero);
+        var hungAtUtc =
+            ConvertLocalToUtc(
+                hungAtLocal);
 
         /*
-         * Me hentar éi måling før starten slik at me kan rekne
-         * intervallet frå nøyaktig opphengstidspunkt.
+         * Me hentar éi måling før opphengstidspunktet slik at
+         * me kan rekne intervallet frå nøyaktig opphengstid.
          *
-         * Me hentar også litt etter no. Frost vil berre returnere
-         * verdiar som faktisk finst.
+         * Me hentar òg litt etter no. Frost returnerer berre
+         * målingar som faktisk finst.
          */
-        var queryFromUtc = hungAtUtc.AddMinutes(
-            -_options.MeasurementIntervalMinutes);
+        var queryFromUtc =
+            hungAtUtc.AddMinutes(
+                -_options.MeasurementIntervalMinutes);
 
-        var queryToUtc = nowUtc.AddMinutes(
-            _options.MeasurementIntervalMinutes);
+        var queryToUtc =
+            nowUtc.AddMinutes(
+                _options.MeasurementIntervalMinutes);
 
         var referenceTime =
             $"{FormatUtc(queryFromUtc)}/" +
             $"{FormatUtc(queryToUtc)}";
 
         var requestUri =
-            BuildRequestUri(referenceTime);
+            BuildRequestUri(
+                referenceTime,
+                station);
 
         _logger.LogInformation(
-            "Hentar temperaturdata frå {SourceId}. " +
-            "Oppheng: {HungAt}. Utrekning: {CalculatedAt}",
-            _options.SourceId,
-            hungAtLocal.ToString("yyyy-MM-dd HH:mm"),
-            nowLocal.ToString("yyyy-MM-dd HH:mm"));
+            "Hentar temperaturdata frå {SourceId} ({SourceName}). " +
+            "Oppheng: {HungAt}. Utrekning: {CalculatedAt}.",
+            station.SourceId,
+            station.Name,
+            hungAtLocal.ToString(
+                "yyyy-MM-dd HH:mm",
+                CultureInfo.InvariantCulture),
+            nowLocal.ToString(
+                "yyyy-MM-dd HH:mm",
+                CultureInfo.InvariantCulture));
 
-        using var request = new HttpRequestMessage(
-            HttpMethod.Get,
-            requestUri);
+        using var request =
+            new HttpRequestMessage(
+                HttpMethod.Get,
+                requestUri);
 
         request.Headers.Authorization =
             CreateAuthorizationHeader(
@@ -125,7 +138,9 @@ public sealed class FrostService
 
         if (!response.IsSuccessStatusCode)
         {
-            var reason = TryReadFrostError(json);
+            var reason =
+                TryReadFrostError(
+                    json);
 
             _logger.LogWarning(
                 "Frost returnerte HTTP {StatusCode}: {Reason}",
@@ -134,7 +149,9 @@ public sealed class FrostService
 
             throw new HttpRequestException(
                 $"Frost returnerte HTTP " +
-                $"{(int)response.StatusCode}: {reason}");
+                $"{(int)response.StatusCode}: {reason}",
+                inner: null,
+                response.StatusCode);
         }
 
         var frostResponse =
@@ -145,7 +162,9 @@ public sealed class FrostService
                 "Frost returnerte eit tomt eller ugyldig JSON-svar.");
 
         var measurements =
-            ExtractMeasurements(frostResponse);
+            ExtractMeasurements(
+                frostResponse,
+                station.ElementId);
 
         return BuildResult(
             measurements,
@@ -153,11 +172,13 @@ public sealed class FrostService
             nowLocal,
             hungAtUtc,
             nowUtc,
-            targetDegreeDays);
+            targetDegreeDays,
+            station);
     }
 
-    private List<TemperatureMeasurement> ExtractMeasurements(
-        FrostObservationResponse frostResponse)
+    private static List<TemperatureMeasurement> ExtractMeasurements(
+        FrostObservationResponse frostResponse,
+        string elementId)
     {
         return frostResponse.Data
             .SelectMany(dataPoint =>
@@ -165,7 +186,7 @@ public sealed class FrostService
                     .Where(observation =>
                         string.Equals(
                             observation.ElementId,
-                            _options.ElementId,
+                            elementId,
                             StringComparison.Ordinal))
                     .Select(observation =>
                     {
@@ -199,32 +220,47 @@ public sealed class FrostService
         DateTime calculatedAtLocal,
         DateTimeOffset periodStartUtc,
         DateTimeOffset periodEndUtc,
-        double targetDegreeDays)
+        double targetDegreeDays,
+        WeatherStationModel station)
     {
-        var dailyResults = new List<MorningDayModel>();
+        var dailyResults =
+            new List<MorningDayModel>();
 
-        var accumulatedDegreeDays = 0.0;
-        var includedWeightedTemperatureHours = 0.0;
-        var includedCoveredHours = 0.0;
+        var accumulatedDegreeDays =
+            0.0;
+
+        var includedWeightedTemperatureHours =
+            0.0;
+
+        var includedCoveredHours =
+            0.0;
 
         var firstDate =
-            DateOnly.FromDateTime(hungAtLocal);
+            DateOnly.FromDateTime(
+                hungAtLocal);
 
         var lastDate =
-            DateOnly.FromDateTime(calculatedAtLocal);
+            DateOnly.FromDateTime(
+                calculatedAtLocal);
 
         for (
             var date = firstDate;
             date <= lastDate;
             date = date.AddDays(1))
         {
-            var dayStartLocal = DateTime.SpecifyKind(
-                date.ToDateTime(TimeOnly.MinValue),
-                DateTimeKind.Unspecified);
+            var dayStartLocal =
+                DateTime.SpecifyKind(
+                    date.ToDateTime(
+                        TimeOnly.MinValue),
+                    DateTimeKind.Unspecified);
 
-            var nextDayStartLocal = DateTime.SpecifyKind(
-                date.AddDays(1).ToDateTime(TimeOnly.MinValue),
-                DateTimeKind.Unspecified);
+            var nextDayStartLocal =
+                DateTime.SpecifyKind(
+                    date
+                        .AddDays(1)
+                        .ToDateTime(
+                            TimeOnly.MinValue),
+                    DateTimeKind.Unspecified);
 
             var segmentStartLocal =
                 hungAtLocal > dayStartLocal
@@ -242,15 +278,18 @@ public sealed class FrostService
             }
 
             var segmentStartUtc =
-                ConvertLocalToUtc(segmentStartLocal);
+                ConvertLocalToUtc(
+                    segmentStartLocal);
 
             var segmentEndUtc =
-                ConvertLocalToUtc(segmentEndLocal);
+                ConvertLocalToUtc(
+                    segmentEndLocal);
 
-            var integration = IntegrateMeasurements(
-                measurements,
-                segmentStartUtc,
-                segmentEndUtc);
+            var integration =
+                IntegrateMeasurements(
+                    measurements,
+                    segmentStartUtc,
+                    segmentEndUtc);
 
             var segmentDurationHours =
                 (segmentEndUtc - segmentStartUtc)
@@ -275,7 +314,8 @@ public sealed class FrostService
                     ? integration.DegreeDays
                     : 0;
 
-            accumulatedDegreeDays += degreeDays;
+            accumulatedDegreeDays +=
+                degreeDays;
 
             if (includedInTotal)
             {
@@ -302,33 +342,54 @@ public sealed class FrostService
                     segmentStartUtc,
                     segmentEndUtc);
 
-            var qualityCodes = measurements
-                .Where(measurement =>
-                    measurement.UtcTimestamp >= segmentStartUtc &&
-                    measurement.UtcTimestamp < segmentEndUtc &&
-                    measurement.QualityCode.HasValue)
-                .Select(measurement =>
-                    measurement.QualityCode!.Value)
-                .Distinct()
-                .OrderBy(code => code)
-                .ToList();
+            var qualityCodes =
+                measurements
+                    .Where(measurement =>
+                        measurement.UtcTimestamp >= segmentStartUtc &&
+                        measurement.UtcTimestamp < segmentEndUtc &&
+                        measurement.QualityCode.HasValue)
+                    .Select(measurement =>
+                        measurement.QualityCode!.Value)
+                    .Distinct()
+                    .OrderBy(code =>
+                        code)
+                    .ToList();
 
             dailyResults.Add(
                 new MorningDayModel
                 {
-                    Date = date,
-                    PeriodStart = segmentStartLocal,
-                    PeriodEnd = segmentEndLocal,
-                    MeanTemperature = meanTemperature,
-                    ObservationCount = observationCount,
+                    Date =
+                        date,
+
+                    PeriodStart =
+                        segmentStartLocal,
+
+                    PeriodEnd =
+                        segmentEndLocal,
+
+                    MeanTemperature =
+                        meanTemperature,
+
+                    ObservationCount =
+                        observationCount,
+
                     ExpectedObservationCount =
                         expectedObservationCount,
-                    CoveragePercent = coveragePercent,
-                    IncludedInTotal = includedInTotal,
-                    DegreeDays = degreeDays,
+
+                    CoveragePercent =
+                        coveragePercent,
+
+                    IncludedInTotal =
+                        includedInTotal,
+
+                    DegreeDays =
+                        degreeDays,
+
                     AccumulatedDegreeDays =
                         accumulatedDegreeDays,
-                    QualityCodes = qualityCodes
+
+                    QualityCodes =
+                        qualityCodes
                 });
         }
 
@@ -364,21 +425,47 @@ public sealed class FrostService
 
         return new MorningResultModel
         {
-            HungAt = hungAtLocal,
-            CalculatedAt = calculatedAtLocal,
-            SourceId = _options.SourceId,
-            SourceName = _options.SourceName,
+            HungAt =
+                hungAtLocal,
+
+            CalculatedAt =
+                calculatedAtLocal,
+
+            SourceId =
+                station.SourceId,
+
+            SourceName =
+                station.Name,
+
+            StationDistanceKilometres =
+                station.DistanceKilometres,
+
+            StationLatitude =
+                station.Latitude,
+
+            StationLongitude =
+                station.Longitude,
+
+            StationMetresAboveSeaLevel =
+                station.MetresAboveSeaLevel,
+
             TargetDegreeDays =
                 targetDegreeDays,
+
             TotalDegreeDays =
                 accumulatedDegreeDays,
+
             AverageTemperature =
                 averageTemperature,
+
             ObservationCount =
                 observationCountInPeriod,
+
             CoveragePercent =
                 totalCoveragePercent,
-            Days = dailyResults
+
+            Days =
+                dailyResults
         };
     }
 
@@ -393,22 +480,28 @@ public sealed class FrostService
             return IntegrationResult.Empty;
         }
 
-        var totalDegreeDays = 0.0;
-        var weightedTemperatureHours = 0.0;
-        var coveredHours = 0.0;
+        var totalDegreeDays =
+            0.0;
+
+        var weightedTemperatureHours =
+            0.0;
+
+        var coveredHours =
+            0.0;
 
         for (
             var index = 0;
             index < measurements.Count;
             index++)
         {
-            var current = measurements[index];
+            var current =
+                measurements[index];
 
             /*
              * Ei temperaturmåling blir rekna som gjeldande fram
              * til neste måling.
              *
-             * For siste måling brukar me normalt måleintervall.
+             * For siste måling brukar me normalt måleintervallet.
              */
             var nextTimestamp =
                 index + 1 < measurements.Count
@@ -455,11 +548,14 @@ public sealed class FrostService
                 intervalHours;
 
             totalDegreeDays +=
-                Math.Max(0, current.Temperature) *
+                Math.Max(
+                    0,
+                    current.Temperature) *
                 intervalHours /
                 24.0;
 
-            coveredHours += intervalHours;
+            coveredHours +=
+                intervalHours;
         }
 
         return new IntegrationResult(
@@ -486,20 +582,72 @@ public sealed class FrostService
             _options.MeasurementIntervalMinutes);
     }
 
-    private string BuildRequestUri(
-        string referenceTime)
+    private static string BuildRequestUri(
+        string referenceTime,
+        WeatherStationModel station)
     {
-        return
+        var requestUri =
             "observations/v0.jsonld" +
-            $"?sources={Encode(_options.SourceId)}" +
+            $"?sources={Encode(station.SourceId)}" +
             $"&referencetime={Encode(referenceTime)}" +
-            $"&elements={Encode(_options.ElementId)}" +
-            $"&timeoffsets={Encode(_options.TimeOffset)}" +
-            $"&timeresolutions={Encode(_options.TimeResolution)}" +
-            $"&timeseriesids={_options.TimeSeriesId}" +
-            $"&levels={_options.Level.ToString(
-                "0.0",
-                CultureInfo.InvariantCulture)}";
+            $"&elements={Encode(station.ElementId)}" +
+            $"&timeoffsets={Encode(station.TimeOffset)}" +
+            $"&timeresolutions={Encode(station.TimeResolution)}" +
+            $"&timeseriesids={station.TimeSeriesId}";
+
+        if (station.Level.HasValue)
+        {
+            requestUri +=
+                $"&levels={station.Level.Value.ToString(
+                    "0.0",
+                    CultureInfo.InvariantCulture)}";
+        }
+
+        return requestUri;
+    }
+
+    private static void ValidateStation(
+        WeatherStationModel station)
+    {
+        if (string.IsNullOrWhiteSpace(
+                station.SourceId))
+        {
+            throw new ArgumentException(
+                "Den valde målestasjonen manglar kjelde-ID.",
+                nameof(station));
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                station.Name))
+        {
+            throw new ArgumentException(
+                "Den valde målestasjonen manglar namn.",
+                nameof(station));
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                station.ElementId))
+        {
+            throw new ArgumentException(
+                "Den valde målestasjonen manglar måleelement.",
+                nameof(station));
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                station.TimeResolution))
+        {
+            throw new ArgumentException(
+                "Den valde målestasjonen manglar tidsoppløysing.",
+                nameof(station));
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                station.TimeOffset))
+        {
+            throw new ArgumentException(
+                "Den valde målestasjonen manglar tidsforskyving.",
+                nameof(station));
+        }
     }
 
     private void ValidateHungAt(
@@ -554,20 +702,6 @@ public sealed class FrostService
                 "Legg han inn med dotnet user-secrets.");
         }
 
-        if (string.IsNullOrWhiteSpace(
-                _options.SourceId))
-        {
-            throw new InvalidOperationException(
-                "Frost:SourceId manglar.");
-        }
-
-        if (string.IsNullOrWhiteSpace(
-                _options.ElementId))
-        {
-            throw new InvalidOperationException(
-                "Frost:ElementId manglar.");
-        }
-
         if (_options.MinimumCoveragePercent
             is < 0 or > 100)
         {
@@ -590,6 +724,12 @@ public sealed class FrostService
                 "Frost:MaximumAcceptedGapMinutes kan ikkje vere " +
                 "mindre enn måleintervallet.");
         }
+
+        if (_options.MaximumDaysBack <= 0)
+        {
+            throw new InvalidOperationException(
+                "Frost:MaximumDaysBack må vere større enn null.");
+        }
     }
 
     private string TryReadFrostError(
@@ -602,10 +742,19 @@ public sealed class FrostService
                     json,
                     _jsonOptions);
 
-            return string.IsNullOrWhiteSpace(
-                error?.Error?.Reason)
-                ? "Ukjend feil frå Frost."
-                : error.Error.Reason;
+            if (!string.IsNullOrWhiteSpace(
+                    error?.Error?.Reason))
+            {
+                return error.Error.Reason;
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    error?.Error?.Message))
+            {
+                return error.Error.Message;
+            }
+
+            return "Ukjend feil frå Frost.";
         }
         catch (JsonException)
         {
@@ -665,7 +814,8 @@ public sealed class FrostService
     private static string Encode(
         string value)
     {
-        return Uri.EscapeDataString(value);
+        return Uri.EscapeDataString(
+            value);
     }
 
     private sealed record TemperatureMeasurement(
