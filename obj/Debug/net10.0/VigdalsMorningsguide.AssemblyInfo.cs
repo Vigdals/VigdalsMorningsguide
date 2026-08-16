@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VigdalsMorningsguide")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7e0d7742e67c2b45da09ec9eb90ee246baedb2f6")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c8e3ed8d27bf8cef18f8c96f2ac927e62e7ba7ef")]
 [assembly: System.Reflection.AssemblyProductAttribute("VigdalsMorningsguide")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VigdalsMorningsguide")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -49,6 +49,23 @@ builder.Services
         "MinimumCoveragePercent må vere mellom 0 og 100.")
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<MetForecastOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            MetForecastOptions.SectionName))
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(
+                options.BaseUrl),
+        "MetForecast:BaseUrl manglar.")
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(
+                options.UserAgent),
+        "MetForecast:UserAgent manglar.")
+    .ValidateOnStart();
+
 static void ConfigureFrostClient(
     IServiceProvider serviceProvider,
     HttpClient httpClient)
@@ -73,11 +90,38 @@ static void ConfigureFrostClient(
             "VigdalsMorningsguide/1.0");
 }
 
+static void ConfigureMetForecastClient(
+    IServiceProvider serviceProvider,
+    HttpClient httpClient)
+{
+    var options =
+        serviceProvider
+            .GetRequiredService<
+                IOptions<MetForecastOptions>>()
+            .Value;
+
+    httpClient.BaseAddress =
+        new Uri(
+            options.BaseUrl);
+
+    httpClient.Timeout =
+        TimeSpan.FromSeconds(
+            30);
+
+    httpClient.DefaultRequestHeaders
+        .UserAgent
+        .ParseAdd(
+            options.UserAgent);
+}
+
 builder.Services.AddHttpClient<FrostService>(
     ConfigureFrostClient);
 
 builder.Services.AddHttpClient<FrostStationService>(
     ConfigureFrostClient);
+
+builder.Services.AddHttpClient<MetForecastService>(
+    ConfigureMetForecastClient);
 
 var app =
     builder.Build();

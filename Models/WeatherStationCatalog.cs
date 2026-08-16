@@ -32,17 +32,18 @@ public static class WeatherStationCatalog
             Municipality = "Sogndal",
             Latitude = 61.2296003,
             Longitude = 7.1245731,
-            MetresAboveSeaLevel = 4
-        },
-        new()
-        {
-            SourceId = "SN55000",
-            Name = "Luster – Ornes",
-            Municipality = "Luster",
-            Latitude = 61.299413,
-            Longitude = 7.313199,
-            MetresAboveSeaLevel = 4
+            MetresAboveSeaLevel = 4 
         }
+        //,
+        //new()
+        //{
+        //    SourceId = "SN55000",
+        //    Name = "Luster – Ornes",
+        //    Municipality = "Luster",
+        //    Latitude = 61.299413,
+        //    Longitude = 7.313199,
+        //    MetresAboveSeaLevel = 4
+        //}
     ];
 
     public static WeatherStationOptionModel? Find(
