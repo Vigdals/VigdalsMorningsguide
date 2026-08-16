@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using VigdalsMorningsguide.Models;
 using VigdalsMorningsguide.Services;
+using System.Text.Json;
 
 namespace VigdalsMorningsguide.Controllers;
 
@@ -9,16 +10,31 @@ public sealed class MorningController : Controller
 {
     private readonly FrostService _frostService;
     private readonly FrostStationService _stationService;
+    private readonly MetForecastService _metForecastService;
+    private readonly MorningForecastService _morningForecastService;
     private readonly ILogger<MorningController> _logger;
 
     public MorningController(
         FrostService frostService,
         FrostStationService stationService,
+        MetForecastService metForecastService,
+        MorningForecastService morningForecastService,
         ILogger<MorningController> logger)
     {
-        _frostService = frostService;
-        _stationService = stationService;
-        _logger = logger;
+        _frostService =
+            frostService;
+
+        _stationService =
+            stationService;
+
+        _metForecastService =
+            metForecastService;
+
+        _morningForecastService =
+            morningForecastService;
+
+        _logger =
+            logger;
     }
 
     [HttpGet]
@@ -105,6 +121,14 @@ public sealed class MorningController : Controller
                     station,
                     cancellationToken);
 
+            if (!model.Result.TargetReached)
+            {
+                await PopulateForecastAsync(
+                    model,
+                    station,
+                    cancellationToken);
+            }
+
             return View(model);
         }
         catch (OperationCanceledException)
@@ -147,6 +171,49 @@ public sealed class MorningController : Controller
                 "Det oppstod ein uventa feil.");
 
             return View(model);
+        }
+    }
+        private async Task PopulateForecastAsync(
+    MorningPageViewModel model,
+    WeatherStationModel station,
+    CancellationToken cancellationToken)
+    {
+        if (model.Result is null ||
+            model.Result.TargetReached)
+        {
+            return;
+        }
+
+        try
+        {
+            var forecastPoints =
+                await _metForecastService
+                    .GetTemperatureForecastAsync(
+                        station,
+                        cancellationToken);
+
+            model.Forecast =
+                _morningForecastService.Calculate(
+                    model.Result,
+                    forecastPoints);
+        }
+        catch (HttpRequestException exception)
+        {
+            /*
+             * Prognosen er eit tillegg.
+             *
+             * Feil hos Locationforecast skal ikkje gjere at
+             * brukaren mistar den gyldige Frost-utrekninga.
+             */
+            _logger.LogWarning(
+                exception,
+                "Klarte ikkje å hente temperaturprognose frå MET.");
+        }
+        catch (JsonException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Klarte ikkje å tolke temperaturprognosen frå MET.");
         }
     }
 

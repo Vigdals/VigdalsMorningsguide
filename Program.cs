@@ -123,6 +123,8 @@ builder.Services.AddHttpClient<FrostStationService>(
 builder.Services.AddHttpClient<MetForecastService>(
     ConfigureMetForecastClient);
 
+builder.Services.AddSingleton<MorningForecastService>();
+
 var app =
     builder.Build();
 

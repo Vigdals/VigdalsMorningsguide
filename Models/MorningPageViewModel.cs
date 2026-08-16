@@ -11,4 +11,5 @@ public sealed class MorningPageViewModel
 
     public IReadOnlyList<SelectListItem> StationOptions { get; set; } =
         [];
+    public MorningForecastModel? Forecast { get; set; }
 }

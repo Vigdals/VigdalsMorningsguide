@@ -117,6 +117,7 @@
     @if (Model.Result is not null)
     {
         var result = Model.Result;
+        var forecast = Model.Forecast;
 
         var progressWidth =
             result.ProgressPercent.ToString(
@@ -208,9 +209,58 @@
                         </p>
                     </div>
                 }
+                else if (forecast?.EstimatedTargetAt is DateTimeOffset estimatedTargetAt)
+                {
+                    <div class="remaining-time-card mb-4"
+                         role="status"
+                         aria-label="Venta tidspunkt for døgngradmålet">
+
+                        <div class="remaining-time-label">
+                            Venta ferdigmørna
+                        </div>
+
+                        <div class="remaining-time-value">
+                            @estimatedTargetAt.ToString(
+                                "dddd d. MMMM 'kl.' HH:mm")
+                        </div>
+
+                        <p class="remaining-time-description mb-0">
+                            Basert på målte døgngrader fram til no
+                            og temperaturprognosen frå MET.
+                        </p>
+                    </div>
+                }
+                else if (forecast is not null)
+                {
+                    <div class="remaining-time-card mb-4"
+                         role="status"
+                         aria-label="Døgngradprognose">
+
+                        <div class="remaining-time-label">
+                            Prognosen rekk ikkje heilt fram
+                        </div>
+
+                        <div class="remaining-time-value">
+                            @forecast.ProjectedTotalDegreeDays.ToString("0.0")
+                            DG ved prognoseslutt
+                        </div>
+
+                        <p class="remaining-time-description mb-0">
+                            Prognosen går fram til
+                            @forecast.ProjectionTo.ToString(
+                                "dddd d. MMMM 'kl.' HH:mm").
+
+                            Då står om lag
+                            @forecast.RemainingDegreeDays.ToString("0.0")
+                            døgngrader att.
+                        </p>
+                    </div>
+                }
                 else if (estimatedTimeText is not null)
                 {
-                    <div class="remaining-time-card mb-4" role="status" aria-label="Estimert tid att til døgngradmålet">
+                    <div class="remaining-time-card mb-4"
+                         role="status"
+                         aria-label="Grovt estimert tid att til døgngradmålet">
 
                         <div class="remaining-time-label">
                             Estimert tid att
@@ -221,7 +271,9 @@
                         </div>
 
                         <p class="remaining-time-description mb-0">
-                            Med same gjennomsnittstemperatur som fram til no.
+                            Temperaturprognosen kunne ikkje brukast.
+                            Dette er eit grovt estimat med same
+                            gjennomsnittstemperatur som fram til no.
                         </p>
                     </div>
                 }

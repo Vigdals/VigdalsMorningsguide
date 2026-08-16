@@ -6,6 +6,7 @@ public sealed class MorningResultModel
 
     public DateTime CalculatedAt { get; init; }
 
+    public DateTimeOffset CalculatedAtUtc { get; init; }
     public string SourceId { get; init; } =
         string.Empty;
 

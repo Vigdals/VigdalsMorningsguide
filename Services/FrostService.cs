@@ -431,6 +431,9 @@ public sealed class FrostService
             CalculatedAt =
                 calculatedAtLocal,
 
+            CalculatedAtUtc =
+                periodEndUtc,
+
             SourceId =
                 station.SourceId,
 
