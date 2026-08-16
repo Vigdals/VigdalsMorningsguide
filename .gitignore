@@ -1,94 +1,78 @@
 # .NET byggartefaktar
-
-[Bb]in/
-[Oo]bj/
+bin/
+obj/
 artifacts/
 publish/
 
 # Visual Studio
-
 .vs/
-_.user
-_.rsuser
-_.suo
-_.userosscache
-\*.sln.docstates
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
 
 # Visual Studio Code
-
-.vscode/
+.vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
 
 # JetBrains Rider
-
 .idea/
-\*.sln.iml
+*.sln.iml
 
 # macOS
-
-.DS*Store
+.DS_Store
 .AppleDouble
 .LSOverride
-.*\*
 
 # Windows
-
 Thumbs.db
 Desktop.ini
 
 # Loggar
-
-\*.log
+*.log
 logs/
 
 # Testresultat og dekning
-
 TestResults/
 coverage/
-coverage.\*
-_.coverage
-_.coveragexml
+coverage.*
+*.coverage
+*.coveragexml
 
 # NuGet
-
-_.nupkg
-_.snupkg
+*.nupkg
+*.snupkg
 packages/
 .nuget/
 
 # Lokale konfigurasjonsfiler og hemmelegheiter
-
 appsettings.Local.json
-appsettings._.Local.json
+appsettings.*.Local.json
 secrets.json
+
 .env
-publish/
-bin/
-obj/
-.env._
+.env.*
 !.env.example
 
 # Sertifikat og nøklar
-
-_.pfx
-_.p12
-_.pem
-_.key
+*.pfx
+*.p12
+*.pem
+*.key
 
 # Databasar og lokale datafiler
-
-_.db
-_.db-shm
-_.db-wal
-_.sqlite
-\*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 
 # Mellombelse filer
-
-_.tmp
-_.temp
-_.bak
-_.swp
-_.swo
-_~
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
