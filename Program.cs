@@ -9,7 +9,7 @@ var builder =
         args);
 
 builder.Services.AddControllersWithViews();
-
+builder.Services.AddMemoryCache();
 var nynorskCulture =
     new CultureInfo(
         "nn-NO");
@@ -66,6 +66,41 @@ builder.Services
         "MetForecast:UserAgent manglar.")
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<ShellyOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            ShellyOptions.SectionName))
+    .Validate(
+        options =>
+            Uri.TryCreate(
+                options.BaseUrl,
+                UriKind.Absolute,
+                out var uri) &&
+            uri.Scheme == Uri.UriSchemeHttps,
+        "Shelly:BaseUrl må vere ei gyldig HTTPS-adresse.")
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(
+                options.DeviceId),
+        "Shelly:DeviceId manglar.")
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(
+                options.AuthKey),
+        "Shelly:AuthKey manglar.")
+    .Validate(
+        options =>
+            options.CacheSeconds
+            is >= 1 and <= 300,
+        "Shelly:CacheSeconds må vere mellom 1 og 300.")
+    .Validate(
+        options =>
+            options.StaleAfterMinutes
+            is >= 1 and <= 1440,
+        "Shelly:StaleAfterMinutes må vere mellom 1 og 1440.")
+    .ValidateOnStart();
+
 static void ConfigureFrostClient(
     IServiceProvider serviceProvider,
     HttpClient httpClient)
@@ -114,14 +149,42 @@ static void ConfigureMetForecastClient(
             options.UserAgent);
 }
 
+static void ConfigureShellyClient(
+    IServiceProvider serviceProvider,
+    HttpClient httpClient)
+{
+    var options =
+        serviceProvider
+            .GetRequiredService<
+                IOptions<ShellyOptions>>()
+            .Value;
+
+    var baseUrl =
+        options.BaseUrl.TrimEnd('/') +
+        "/";
+
+    httpClient.BaseAddress =
+        new Uri(
+            baseUrl);
+
+    httpClient.Timeout =
+        TimeSpan.FromSeconds(
+            10);
+
+    httpClient.DefaultRequestHeaders
+        .UserAgent
+        .ParseAdd(
+            "VigdalsMorningsguide/1.0");
+}
+
 builder.Services.AddHttpClient<FrostService>(
     ConfigureFrostClient);
-
 builder.Services.AddHttpClient<FrostStationService>(
     ConfigureFrostClient);
-
 builder.Services.AddHttpClient<MetForecastService>(
     ConfigureMetForecastClient);
+builder.Services.AddHttpClient<ShellyService>(
+    ConfigureShellyClient);
 
 builder.Services.AddSingleton<MorningForecastService>();
 

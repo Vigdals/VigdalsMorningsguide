@@ -1,8 +1,8 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using VigdalsMorningsguide.Models;
 using VigdalsMorningsguide.Services;
-using System.Text.Json;
 
 namespace VigdalsMorningsguide.Controllers;
 
@@ -12,6 +12,7 @@ public sealed class MorningController : Controller
     private readonly FrostStationService _stationService;
     private readonly MetForecastService _metForecastService;
     private readonly MorningForecastService _morningForecastService;
+    private readonly ShellyService _shellyService;
     private readonly ILogger<MorningController> _logger;
 
     public MorningController(
@@ -19,6 +20,7 @@ public sealed class MorningController : Controller
         FrostStationService stationService,
         MetForecastService metForecastService,
         MorningForecastService morningForecastService,
+        ShellyService shellyService,
         ILogger<MorningController> logger)
     {
         _frostService =
@@ -33,12 +35,16 @@ public sealed class MorningController : Controller
         _morningForecastService =
             morningForecastService;
 
+        _shellyService =
+            shellyService;
+
         _logger =
             logger;
     }
 
     [HttpGet]
-    public IActionResult Index()
+    public async Task<IActionResult> Index(
+        CancellationToken cancellationToken)
     {
         var defaultTime =
             DateTime.Now.AddDays(-2);
@@ -46,25 +52,43 @@ public sealed class MorningController : Controller
         var model =
             new MorningPageViewModel
             {
-                Input = new MorningInputModel
-                {
-                    HungDate =
-                        DateOnly.FromDateTime(defaultTime),
+                Input =
+                    new MorningInputModel
+                    {
+                        HungDate =
+                            DateOnly.FromDateTime(
+                                defaultTime),
 
-                    HungTime =
-                        TimeOnly.FromDateTime(defaultTime),
+                        HungTime =
+                            TimeOnly.FromDateTime(
+                                defaultTime),
 
-                    SelectedSourceId =
-                        WeatherStationCatalog.DefaultSourceId,
+                        SelectedSourceId =
+                            WeatherStationCatalog
+                                .DefaultSourceId,
 
-                    TargetDegreeDays =
-                        80
-                }
+                        TargetDegreeDays =
+                            80
+                    }
             };
 
-        PopulateStationOptions(model);
+        PopulateStationOptions(
+            model);
 
-        return View(model);
+        try
+        {
+            await PopulateShellyMeasurementAsync(
+                model,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            return new EmptyResult();
+        }
+
+        return View(
+            model);
     }
 
     [HttpPost]
@@ -73,15 +97,29 @@ public sealed class MorningController : Controller
         MorningPageViewModel model,
         CancellationToken cancellationToken)
     {
-        PopulateStationOptions(model);
-
-        if (!ModelState.IsValid)
-        {
-            return View(model);
-        }
+        PopulateStationOptions(
+            model);
 
         try
         {
+            /*
+             * Shelly er tilleggsinformasjon og blir henta
+             * uavhengig av sjølve døgngradeutrekninga.
+             *
+             * Me gjer dette før valideringssjekken slik at
+             * Shelly-status framleis kan visast dersom skjemaet
+             * inneheld ugyldige verdiar.
+             */
+            await PopulateShellyMeasurementAsync(
+                model,
+                cancellationToken);
+
+            if (!ModelState.IsValid)
+            {
+                return View(
+                    model);
+            }
+
             var selectedStation =
                 WeatherStationCatalog.Find(
                     model.Input.SelectedSourceId);
@@ -92,7 +130,8 @@ public sealed class MorningController : Controller
                     "Input.SelectedSourceId",
                     "Den valde målestasjonen finst ikkje.");
 
-                return View(model);
+                return View(
+                    model);
             }
 
             var hungAt =
@@ -111,7 +150,8 @@ public sealed class MorningController : Controller
                     "Målestasjonen har ikkje gyldige " +
                     "temperaturmålingar for perioden.");
 
-                return View(model);
+                return View(
+                    model);
             }
 
             model.Result =
@@ -129,7 +169,8 @@ public sealed class MorningController : Controller
                     cancellationToken);
             }
 
-            return View(model);
+            return View(
+                model);
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
@@ -146,10 +187,18 @@ public sealed class MorningController : Controller
                 string.Empty,
                 exception.Message);
 
-            return View(model);
+            return View(
+                model);
         }
         catch (HttpRequestException exception)
         {
+            /*
+             * HttpRequestException frå MET og Shelly blir
+             * handtert i dei respektive hjelpefunksjonane.
+             *
+             * Ei feil som kjem heilt hit er derfor normalt
+             * frå Frost-kjeda.
+             */
             _logger.LogError(
                 exception,
                 "Klarte ikkje å hente data frå Frost.");
@@ -158,7 +207,8 @@ public sealed class MorningController : Controller
                 string.Empty,
                 "Klarte ikkje å hente temperaturdata frå Frost.");
 
-            return View(model);
+            return View(
+                model);
         }
         catch (Exception exception)
         {
@@ -170,13 +220,80 @@ public sealed class MorningController : Controller
                 string.Empty,
                 "Det oppstod ein uventa feil.");
 
-            return View(model);
+            return View(
+                model);
         }
     }
-        private async Task PopulateForecastAsync(
-    MorningPageViewModel model,
-    WeatherStationModel station,
-    CancellationToken cancellationToken)
+
+    private async Task PopulateShellyMeasurementAsync(
+        MorningPageViewModel model,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            model.ShellyMeasurement =
+                await _shellyService
+                    .GetCurrentMeasurementAsync(
+                        cancellationToken);
+
+            if (model.ShellyMeasurement is null)
+            {
+                model.ShellyStatusMessage =
+                    "Shelly har ikkje ei gyldig temperatur- " +
+                    "eller luftfuktmåling akkurat no.";
+            }
+            else
+            {
+                model.ShellyStatusMessage =
+                    null;
+            }
+        }
+        catch (HttpRequestException exception)
+        {
+            /*
+             * Shelly er eit tillegg.
+             *
+             * Feil mot Shelly Cloud skal ikkje hindre
+             * brukaren i å bruke mørningskalkulatoren.
+             */
+            _logger.LogWarning(
+                exception,
+                "Klarte ikkje å hente måling frå Shelly Cloud.");
+
+            model.ShellyStatusMessage =
+                "Klarte ikkje å hente siste måling frå " +
+                "Shelly akkurat no.";
+        }
+        catch (JsonException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Klarte ikkje å tolke Shelly-responsen.");
+
+            model.ShellyStatusMessage =
+                "Shelly returnerte ei måling som ikkje " +
+                "kunne tolkast.";
+        }
+        catch (OperationCanceledException exception)
+            when (!cancellationToken.IsCancellationRequested)
+        {
+            /*
+             * Dette er typisk timeout frå HttpClient,
+             * ikkje at brukaren avbraut HTTP-requesten.
+             */
+            _logger.LogWarning(
+                exception,
+                "Tidsavbrot ved kall mot Shelly Cloud.");
+
+            model.ShellyStatusMessage =
+                "Shelly Cloud brukte for lang tid på å svare.";
+        }
+    }
+
+    private async Task PopulateForecastAsync(
+        MorningPageViewModel model,
+        WeatherStationModel station,
+        CancellationToken cancellationToken)
     {
         if (model.Result is null ||
             model.Result.TargetReached)
@@ -202,18 +319,20 @@ public sealed class MorningController : Controller
             /*
              * Prognosen er eit tillegg.
              *
-             * Feil hos Locationforecast skal ikkje gjere at
-             * brukaren mistar den gyldige Frost-utrekninga.
+             * Feil hos Locationforecast skal ikkje gjere
+             * at brukaren mistar den gyldige Frost-utrekninga.
              */
             _logger.LogWarning(
                 exception,
-                "Klarte ikkje å hente temperaturprognose frå MET.");
+                "Klarte ikkje å hente " +
+                "temperaturprognose frå MET.");
         }
         catch (JsonException exception)
         {
             _logger.LogWarning(
                 exception,
-                "Klarte ikkje å tolke temperaturprognosen frå MET.");
+                "Klarte ikkje å tolke " +
+                "temperaturprognosen frå MET.");
         }
     }
 
@@ -222,12 +341,16 @@ public sealed class MorningController : Controller
     {
         model.StationOptions =
             WeatherStationCatalog.Stations
-                .Select(station =>
-                    new SelectListItem
-                    {
-                        Value = station.SourceId,
-                        Text = station.DisplayName
-                    })
+                .Select(
+                    station =>
+                        new SelectListItem
+                        {
+                            Value =
+                                station.SourceId,
+
+                            Text =
+                                station.DisplayName
+                        })
                 .ToList();
     }
 }

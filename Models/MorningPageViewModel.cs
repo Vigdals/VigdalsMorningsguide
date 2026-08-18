@@ -9,7 +9,12 @@ public sealed class MorningPageViewModel
 
     public MorningResultModel? Result { get; set; }
 
+    public MorningForecastModel? Forecast { get; set; }
+
+    public ShellyMeasurementModel? ShellyMeasurement { get; set; }
+
+    public string? ShellyStatusMessage { get; set; }
+
     public IReadOnlyList<SelectListItem> StationOptions { get; set; } =
         [];
-    public MorningForecastModel? Forecast { get; set; }
 }
