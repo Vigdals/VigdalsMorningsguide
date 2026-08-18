@@ -13,7 +13,11 @@ services:
       ASPNETCORE_ENVIRONMENT: "Production"
       ASPNETCORE_URLS: "http://0.0.0.0:8080"
 
-      Frost__ClientId: ${FROST_CLIENT_ID}
+      Frost__ClientId: "${FROST_CLIENT_ID}"
+
+      Shelly__BaseUrl: "${SHELLY_BASE_URL}"
+      Shelly__DeviceId: "${SHELLY_DEVICE_ID}"
+      Shelly__AuthKey: "${SHELLY_AUTH_KEY}"
 
     ports:
       - "8081:8080"
