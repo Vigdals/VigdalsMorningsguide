@@ -313,27 +313,7 @@
             </div>
 
             <div class="guide-card-body">
-
-        @if (result.RefrigeratedAt is DateTime refrigeratedAt &&
-             result.RefrigeratorTemperatureCelsius
-                 is double refrigeratorTemperature)
-        {
-            <div class="alert alert-secondary mb-4"
-                 role="status">
-
-                <strong>
-                    Kjøleskap frå
-                    @refrigeratedAt.ToString("dd.MM 'kl.' HH:mm").
-                </strong>
-
-                Frå dette tidspunktet reknar kalkulatoren med fast
-                @refrigeratorTemperature.ToString("0.0") °C,
-                altså
-                @refrigeratorTemperature.ToString("0.0")
-                døgngrader per heilt døgn.
-            </div>
-        }
-
+            
                 @if (result.TargetReached)
                 {
                     <div class="remaining-time-card
