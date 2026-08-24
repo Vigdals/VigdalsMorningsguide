@@ -72,6 +72,7 @@ Nginx Reverse Proxy
 DuckDNS Dynamisk DNS
 Let's Encrypt Gratis SSL
 Frost API Historiske temperaturdata
+Shelly lokal tempmåling
 
 ---
 
@@ -157,12 +158,12 @@ VigdalsMorningsguide/
 
 # Planlagde funksjonar
 
-- [ ] Lokal temperatur frå Raspberry Pi
-- [ ] Luftfukt
-- [ ] Mørningsguide med anbefalingar
-- [ ] Fleire dyreartar
-- [ ] Varsling når kjøtet er ferdigmørna
+- [x] Lokal temperatur og luftfuktigheit frå Shelly eller ESP32 (delvis implementert)
+- [x] Valg om kjøleskapsmørning
+- [ ] Infoside om mørningsguide med anbefalingar
+- [ ] Varsling når kjøtet er ferdigmørna via e-post
 - [ ] PWA/mobilstøtte
+- [ ] Plan om korleis skalere ut målarar til lokale jegrar
 
 ---
 
