@@ -3,11 +3,20 @@
 
 @{
     ViewData["Title"] = "Vigdals mørningskalkulator";
+
+    var todayIso =
+        DateOnly.FromDateTime(DateTime.Now)
+            .ToString(
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture);
 }
 
 <div class="container py-4 py-lg-5">
     <header class="guide-header guide-header-with-antlers mb-4 mb-lg-5">
-        <img src="~/images/hjortegevir.webp" class="guide-antlers" alt="" aria-hidden="true"
+        <img src="~/images/hjortegevir.webp"
+             class="guide-antlers"
+             alt=""
+             aria-hidden="true"
              asp-append-version="true" />
 
         <div class="guide-header-content">
@@ -21,98 +30,711 @@
         </div>
     </header>
 
-    <section class="card guide-card mb-4" aria-labelledby="input-heading">
+    <section class="card guide-card mb-4"
+             aria-labelledby="input-heading">
 
         <div class="guide-card-header">
-            <h2 id="input-heading" class="h4 mb-0">
+            <h2 id="input-heading"
+                class="h4 mb-0">
                 Registrer målestasjon, når du hengte opp viltet og ønska døgngrader
             </h2>
         </div>
 
         <div class="guide-card-body">
-            <form asp-action="Index" asp-controller="Morning" method="post" id="maturation-form">
+            <form asp-action="Index"
+                  asp-controller="Morning"
+                  method="post"
+                  id="maturation-form">
 
-                <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert">
+                <div asp-validation-summary="ModelOnly"
+                     class="alert alert-danger"
+                     role="alert">
                 </div>
 
                 <div class="row g-4 align-items-start">
+
                     <div class="col-12">
-                        <label asp-for="Input.SelectedSourceId" class="form-label fw-semibold">
+                        <label asp-for="Input.SelectedSourceId"
+                               class="form-label fw-semibold">
                         </label>
 
-                        <select asp-for="Input.SelectedSourceId" asp-items="Model.StationOptions"
-                                class="form-select form-select-lg" aria-describedby="station-help">
+                        <select asp-for="Input.SelectedSourceId"
+                                asp-items="Model.StationOptions"
+                                class="form-select form-select-lg"
+                                aria-describedby="station-help">
                         </select>
 
-                        <span asp-validation-for="Input.SelectedSourceId" class="text-danger small">
+                        <span asp-validation-for="Input.SelectedSourceId"
+                              class="text-danger small">
                         </span>
 
-                        <div id="station-help" class="form-text">
+                        <div id="station-help"
+                             class="form-text">
                             Vel målestasjonen som best liknar temperaturen
                             der kjøtet heng.
                         </div>
                     </div>
 
                     <div class="col-md-6 col-lg-3">
-                        <label asp-for="Input.HungDate" class="form-label fw-semibold">
+                        <label asp-for="Input.HungDate"
+                               class="form-label fw-semibold">
                         </label>
 
-                        <input asp-for="Input.HungDate" type="date" class="form-control form-control-lg"
+                        <input asp-for="Input.HungDate"
+                               type="date"
+                               class="form-control form-control-lg"
+                               max="@todayIso"
                                aria-describedby="hung-date-help" />
 
-                        <span asp-validation-for="Input.HungDate" class="text-danger small">
+                        <span asp-validation-for="Input.HungDate"
+                              class="text-danger small">
                         </span>
 
-                        <div id="hung-date-help" class="form-text">
+                        <div id="hung-date-help"
+                             class="form-text">
                             Dato då viltet vart hengt opp.
                         </div>
                     </div>
 
                     <div class="col-md-6 col-lg-2">
-                        <label asp-for="Input.HungTime" class="form-label fw-semibold">
+                        <label asp-for="Input.HungTime"
+                               class="form-label fw-semibold">
                         </label>
 
-                        <input asp-for="Input.HungTime" type="time" class="form-control form-control-lg" step="60"
+                        <input asp-for="Input.HungTime"
+                               type="time"
+                               class="form-control form-control-lg"
+                               step="60"
                                aria-describedby="hung-time-help" />
 
-                        <span asp-validation-for="Input.HungTime" class="text-danger small">
+                        <span asp-validation-for="Input.HungTime"
+                              class="text-danger small">
                         </span>
                     </div>
 
                     <div class="col-md-6 col-lg-3">
-                        <label asp-for="Input.TargetDegreeDays" class="form-label fw-semibold">
+                        <label asp-for="Input.TargetDegreeDays"
+                               class="form-label fw-semibold">
                         </label>
 
                         <div class="input-group input-group-lg">
-                            <input asp-for="Input.TargetDegreeDays" type="number" class="form-control" min="1" max="120"
-                                   step="1" inputmode="numeric" aria-describedby="target-degree-days-help" />
+                            <input asp-for="Input.TargetDegreeDays"
+                                   type="number"
+                                   class="form-control"
+                                   min="1"
+                                   max="120"
+                                   step="1"
+                                   inputmode="numeric"
+                                   aria-describedby="target-degree-days-help" />
 
                             <span class="input-group-text">
                                 DG
                             </span>
                         </div>
 
-                        <span asp-validation-for="Input.TargetDegreeDays" class="text-danger small">
+                        <span asp-validation-for="Input.TargetDegreeDays"
+                              class="text-danger small">
                         </span>
 
-                        <div id="target-degree-days-help" class="form-text">
+                        <div id="target-degree-days-help"
+                             class="form-text">
                             Min gullstandard er 80.
                         </div>
                     </div>
 
+                    <div class="col-12">
+                        <div class="border rounded-3 p-3 bg-body-tertiary">
+
+                            <div class="form-check form-switch mb-1">
+
+                                <input asp-for="Input.HasBeenRefrigerated"
+                                       class="form-check-input"
+                                       type="checkbox"
+                                       role="switch"
+                                       aria-controls="refrigerator-date-container"
+                                       aria-describedby="refrigerator-help" />
+
+                                <label asp-for="Input.HasBeenRefrigerated"
+                                       class="form-check-label fw-semibold">
+                                </label>
+                            </div>
+
+                            <div id="refrigerator-help"
+                                 class="form-text mt-0">
+                                Valfritt. Dersom kjøtet er lagt i kjøleskap,
+                                reknar kalkulatoren med fast 4 °C frå den valde datoen.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="refrigerator-date-container"
+                         class="col-12 @(Model.Input.HasBeenRefrigerated ? string.Empty : "d-none")">
+
+                        <div class="row g-3 align-items-start">
+
+                            <div class="col-md-4 col-lg-3">
+                                <label asp-for="Input.RefrigeratedFromDate"
+                                       class="form-label fw-semibold">
+                                    Dato lagt i kjøleskap
+                                </label>
+
+                                <input asp-for="Input.RefrigeratedFromDate"
+                                       type="date"
+                                       class="form-control form-control-lg"
+                                       max="@todayIso"
+                                       aria-describedby="refrigerator-date-help" />
+
+                                <span asp-validation-for="Input.RefrigeratedFromDate"
+                                      class="text-danger small">
+                                </span>
+
+                                <div id="refrigerator-date-help"
+                                     class="form-text">
+                                    Dato kjøtet vart lagt inn.
+                                </div>
+                            </div>
+
+                            <div class="col-md-3 col-lg-2">
+                                <label asp-for="Input.RefrigeratedFromTime"
+                                       class="form-label fw-semibold">
+                                    Klokkeslett
+                                </label>
+
+                                <input asp-for="Input.RefrigeratedFromTime"
+                                       type="time"
+                                       step="60"
+                                       class="form-control form-control-lg"
+                                       aria-describedby="refrigerator-time-help" />
+
+                                <span asp-validation-for="Input.RefrigeratedFromTime"
+                                      class="text-danger small">
+                                </span>
+
+                                <div id="refrigerator-time-help"
+                                     class="form-text">
+                                    Tidspunkt kjøtet vart lagt inn.
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
                     <div class="col-md-6 col-lg-4">
-                        <label class="form-label d-none d-lg-block" aria-hidden="true">
+                        <label class="form-label d-none d-lg-block"
+                               aria-hidden="true">
                             &nbsp;
                         </label>
 
-                        <button type="submit" class="btn btn-primary btn-lg w-100 calculate-button">
+                        <button type="submit"
+                                class="btn btn-primary btn-lg w-100 calculate-button">
                             Rekn ut døgngrader
                         </button>
                     </div>
+
                 </div>
             </form>
         </div>
     </section>
+
+    @if (Model.Result is not null)
+    {
+        var result = Model.Result;
+        var forecast = Model.Forecast;
+
+        var progressWidth =
+            result.ProgressPercent.ToString(
+                "0.0",
+                CultureInfo.InvariantCulture);
+
+        string? estimatedTimeText = null;
+
+        if (result.EstimatedHoursRemaining is double estimatedHours)
+        {
+            var roundedHours =
+                Math.Max(
+                    0,
+                    (int)Math.Round(
+                        estimatedHours));
+
+            var estimatedDays =
+                roundedHours / 24;
+
+            var estimatedRemainingHours =
+                roundedHours % 24;
+
+            estimatedTimeText =
+                estimatedDays switch
+                {
+                    > 0 when estimatedRemainingHours > 0 =>
+                        $"{estimatedDays} døgn og " +
+                        $"{estimatedRemainingHours} timar",
+
+                    > 0 =>
+                        $"{estimatedDays} døgn",
+
+                    _ when estimatedRemainingHours > 0 =>
+                        $"{estimatedRemainingHours} timar",
+
+                    _ =>
+                        "Under éin time"
+                };
+        }
+
+        <section class="card guide-card mb-4"
+                 aria-labelledby="result-heading">
+
+            <div class="guide-card-header d-flex flex-column flex-md-row
+                justify-content-between align-items-md-center gap-3">
+
+                <div>
+                    <h2 id="result-heading"
+                        class="h4 mb-1">
+                        Status for mørninga
+                    </h2>
+
+                    <p class="text-body-secondary mb-0">
+                        Rekna fram til
+                        @result.CalculatedAt.ToString(
+                            "dd.MM.yyyy 'kl.' HH:mm")
+                    </p>
+                </div>
+
+                @if (result.TargetReached)
+                {
+                    <span class="badge rounded-pill text-bg-success fs-6">
+                        Målet er nådd
+                    </span>
+                }
+                else
+                {
+                    <span class="badge rounded-pill text-bg-primary fs-6">
+                        @result.ProgressPercent.ToString("0") % fullført
+                    </span>
+                }
+            </div>
+
+            <div class="guide-card-body">
+
+        @if (result.RefrigeratedAt is DateTime refrigeratedAt &&
+             result.RefrigeratorTemperatureCelsius
+                 is double refrigeratorTemperature)
+        {
+            <div class="alert alert-secondary mb-4"
+                 role="status">
+
+                <strong>
+                    Kjøleskap frå
+                    @refrigeratedAt.ToString("dd.MM 'kl.' HH:mm").
+                </strong>
+
+                Frå dette tidspunktet reknar kalkulatoren med fast
+                @refrigeratorTemperature.ToString("0.0") °C,
+                altså
+                @refrigeratorTemperature.ToString("0.0")
+                døgngrader per heilt døgn.
+            </div>
+        }
+
+                @if (result.TargetReached)
+                {
+                    <div class="remaining-time-card
+                        remaining-time-card-complete mb-4"
+                         role="status">
+
+                        <div class="remaining-time-label">
+                            Status
+                        </div>
+
+                        <div class="remaining-time-value">
+                            Målet er nådd
+                        </div>
+
+                        <p class="remaining-time-description mb-0">
+                            Slaktet har passert målet på
+                            @result.TargetDegreeDays.ToString("0")
+                            døgngrader.
+                        </p>
+                    </div>
+                }
+                else if (forecast?.EstimatedTargetAt
+                         is DateTimeOffset estimatedTargetAt)
+                {
+                    <div class="remaining-time-card mb-4"
+                         role="status"
+                         aria-label="Venta tidspunkt for døgngradmålet">
+
+                        <div class="remaining-time-label">
+                            Venta ferdigmørna
+                        </div>
+
+                        <div class="remaining-time-value">
+                            @estimatedTargetAt.ToString(
+                                "dddd d. MMMM 'kl.' HH:mm")
+                        </div>
+
+                        @if (result.RefrigeratedAt.HasValue &&
+                             result.RefrigeratorTemperatureCelsius
+                                 is double forecastRefrigeratorTemperature)
+                        {
+                            <p class="remaining-time-description mb-0">
+                                Basert på opptente døgngrader fram til no
+                                og fast
+                                @forecastRefrigeratorTemperature.ToString("0.0") °C
+                                vidare i kjøleskapet.
+                            </p>
+                        }
+                        else
+                        {
+                            <p class="remaining-time-description mb-0">
+                                Basert på målte døgngrader fram til no
+                                og temperaturprognosen frå MET.
+                            </p>
+                        }
+                    </div>
+                }
+                else if (forecast is not null)
+                {
+                    <div class="remaining-time-card mb-4"
+                         role="status"
+                         aria-label="Døgngradprognose">
+
+                        <div class="remaining-time-label">
+                            Prognosen rekk ikkje heilt fram
+                        </div>
+
+                        <div class="remaining-time-value">
+                            @forecast.ProjectedTotalDegreeDays.ToString("0.0")
+                            DG ved prognoseslutt
+                        </div>
+
+                        <p class="remaining-time-description mb-0">
+                            Prognosen går fram til
+                            @forecast.ProjectionTo.ToString(
+                                "dddd d. MMMM 'kl.' HH:mm").
+
+                            Då står om lag
+                            @forecast.RemainingDegreeDays.ToString("0.0")
+                            døgngrader att.
+                        </p>
+                    </div>
+                }
+                else if (estimatedTimeText is not null)
+                {
+                    <div class="remaining-time-card mb-4"
+                         role="status"
+                         aria-label="Grovt estimert tid att til døgngradmålet">
+
+                        <div class="remaining-time-label">
+                            Estimert tid att
+                        </div>
+
+                        <div class="remaining-time-value">
+                            @estimatedTimeText
+                        </div>
+
+                        <p class="remaining-time-description mb-0">
+                            Temperaturprognosen kunne ikkje brukast.
+                            Dette er eit grovt estimat med same
+                            gjennomsnittstemperatur som fram til no.
+                        </p>
+                    </div>
+                }
+
+                <div class="row g-3 mb-4">
+
+                    <div class="col-md-4">
+                        <div class="summary-card">
+
+                            <div class="summary-label">
+                                Døgngrader
+                            </div>
+
+                            <div class="summary-value">
+                                @result.TotalDegreeDays.ToString("0.0")
+
+                                <span class="summary-target">
+                                    / @result.TargetDegreeDays.ToString("0")
+                                </span>
+                            </div>
+
+                            <div class="summary-subtext">
+                                @result.RemainingDegreeDays.ToString("0.0")
+                                døgngrader står att
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="summary-card">
+
+                            <div class="summary-label">
+                                Tid sidan oppheng
+                            </div>
+
+                            <div class="summary-value">
+                                @result.ElapsedWholeDays døgn
+                            </div>
+
+                            <div class="summary-subtext">
+                                @result.ElapsedRemainingHours timar og
+                                @result.ElapsedRemainingMinutes minutt
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="summary-card">
+
+                            <div class="summary-label">
+                                Snittemperatur
+                            </div>
+
+                            <div class="summary-value">
+                                @if (result.AverageTemperature.HasValue)
+                                {
+                                    @($"{result.AverageTemperature.Value:0.0} °C")
+                                }
+                                else
+                                {
+                                    <span>–</span>
+                                }
+                            </div>
+
+                            <div class="summary-subtext">
+                                For perioden med gyldige målingar
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="progress degree-progress mb-3"
+                     role="progressbar"
+                     aria-label="Framdrift mot valt døgngradmål"
+                     aria-valuenow="@progressWidth"
+                     aria-valuemin="0"
+                     aria-valuemax="100">
+
+                    <div class="progress-bar"
+                         style="width: @(progressWidth)%">
+                        @result.ProgressPercent.ToString("0") %
+                    </div>
+                </div>
+
+                @if (result.TargetReached)
+                {
+                    <div class="alert alert-success mb-4"
+                         role="status">
+
+                        <strong>
+                            Målet på
+                            @result.TargetDegreeDays.ToString("0")
+                            døgngrader er nådd.
+                        </strong>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info mb-4"
+                         role="status">
+
+                        Det står att
+
+                        <strong>
+                            @result.RemainingDegreeDays.ToString("0.0")
+                            døgngrader
+                        </strong>
+
+                        til målet på
+                        @result.TargetDegreeDays.ToString("0").
+                    </div>
+                }
+
+                @if (result.ExcludedDayCount > 0)
+                {
+                    <div class="alert alert-warning mb-4"
+                         role="alert">
+
+                        Nokre periodar manglar tilstrekkelege
+                        temperaturmålingar. Utrekninga kan derfor vere
+                        mindre presis.
+                    </div>
+                }
+
+                <hr class="my-4" />
+
+                <h3 class="h5 mb-3">
+                    Detaljar
+                </h3>
+
+                <dl class="row result-details mb-0">
+
+                    <dt class="col-sm-5 col-lg-4">
+                        Hengt opp
+                    </dt>
+
+                    <dd class="col-sm-7 col-lg-8">
+                        @result.HungAt.ToString(
+                            "dd.MM.yyyy 'kl.' HH:mm")
+                    </dd>
+
+                    @if (result.RefrigeratedAt is DateTime detailsRefrigeratedAt)
+                    {
+                        <dt class="col-sm-5 col-lg-4">
+                            Lagt i kjøleskap
+                        </dt>
+
+                        <dd class="col-sm-7 col-lg-8">
+                            @detailsRefrigeratedAt.ToString(
+                                "dd.MM.yyyy 'kl.' HH:mm")
+                        </dd>
+                    }
+
+                    @if (result.RefrigeratorTemperatureCelsius
+                         is double detailsRefrigeratorTemperature)
+                    {
+                        <dt class="col-sm-5 col-lg-4">
+                            Kjøleskapstemperatur
+                        </dt>
+
+                        <dd class="col-sm-7 col-lg-8">
+                            @detailsRefrigeratorTemperature.ToString("0.0") °C
+                        </dd>
+                    }
+
+                    <dt class="col-sm-5 col-lg-4">
+                        Rekna fram til
+                    </dt>
+
+                    <dd class="col-sm-7 col-lg-8">
+                        @result.CalculatedAt.ToString(
+                            "dd.MM.yyyy 'kl.' HH:mm")
+                    </dd>
+
+                    <dt class="col-sm-5 col-lg-4">
+                        Målestasjon
+                    </dt>
+
+                    <dd class="col-sm-7 col-lg-8">
+                        @result.SourceName
+
+                        <span class="text-body-secondary">
+                            (@result.SourceId)
+                        </span>
+                    </dd>
+
+                    @if (result.StationMetresAboveSeaLevel.HasValue)
+                    {
+                        <dt class="col-sm-5 col-lg-4">
+                            Stasjonshøgd
+                        </dt>
+
+                        <dd class="col-sm-7 col-lg-8">
+                            @result.StationMetresAboveSeaLevel.Value.ToString("0")
+                            moh.
+                        </dd>
+                    }
+
+                </dl>
+            </div>
+        </section>
+
+        <section class="card guide-card mb-4"
+                 aria-labelledby="daily-values-heading">
+
+            <div class="guide-card-header">
+                <h2 id="daily-values-heading"
+                    class="h4 mb-1">
+                    Døgnverdiar
+                </h2>
+
+                <p class="text-body-secondary mb-0">
+                    Temperatur og opptente døgngrader per dag.
+                </p>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover day-table mb-0">
+
+                    <caption class="visually-hidden">
+                        Døgnverdiar for temperatur og opptente døgngrader.
+                    </caption>
+
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col"
+                                class="ps-4">
+                                Dato og periode
+                            </th>
+
+                            <th scope="col"
+                                class="text-end">
+                                Temperatur
+                            </th>
+
+                            <th scope="col"
+                                class="text-end">
+                                Døgngrader
+                            </th>
+
+                            <th scope="col"
+                                class="text-end pe-4">
+                                Samla
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var day in result.Days)
+                        {
+                            <tr>
+                                <td class="ps-4">
+
+                                    <div class="fw-semibold">
+                                        @day.Date.ToString("dd.MM.yyyy")
+
+                                        @if (day.UsesRefrigeratorTemperature)
+                                        {
+                                            <span class="badge text-bg-secondary ms-1">
+                                                Kjøleskap
+                                            </span>
+                                        }
+                                    </div>
+
+                                    <small class="text-body-secondary">
+                                        kl. @day.PeriodStart.ToString("HH:mm")
+                                        til @day.PeriodEnd.ToString("HH:mm")
+                                    </small>
+                                </td>
+
+                                <td class="text-end">
+                                    @if (day.MeanTemperature.HasValue)
+                                    {
+                                        @($"{day.MeanTemperature.Value:0.0} °C")
+                                    }
+                                    else
+                                    {
+                                        <span class="text-body-secondary">
+                                            –
+                                        </span>
+                                    }
+                                </td>
+
+                                <td class="text-end fw-semibold">
+                                    @day.DegreeDays.ToString("0.00")
+                                </td>
+
+                                <td class="text-end fw-semibold pe-4">
+                                    @day.AccumulatedDegreeDays.ToString("0.00")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+
+                </table>
+            </div>
+        </section>
+    }
 
     @if (Model.ShellyMeasurement is { } shelly)
     {
@@ -327,412 +949,93 @@
         </div>
     }
 
-    @if (Model.Result is not null)
-
-    @if (Model.Result is not null)
-    {
-        var result = Model.Result;
-        var forecast = Model.Forecast;
-
-        var progressWidth =
-            result.ProgressPercent.ToString(
-                "0.0",
-                CultureInfo.InvariantCulture);
-
-        string? estimatedTimeText = null;
-
-        if (result.EstimatedHoursRemaining is double estimatedHours)
-        {
-            var roundedHours =
-                Math.Max(
-                    0,
-                    (int)Math.Round(estimatedHours));
-
-            var estimatedDays =
-                roundedHours / 24;
-
-            var estimatedRemainingHours =
-                roundedHours % 24;
-
-            estimatedTimeText =
-                estimatedDays switch
-                {
-                    > 0 when estimatedRemainingHours > 0 =>
-                        $"{estimatedDays} døgn og " +
-                        $"{estimatedRemainingHours} timar",
-
-                    > 0 =>
-                        $"{estimatedDays} døgn",
-
-                    _ when estimatedRemainingHours > 0 =>
-                        $"{estimatedRemainingHours} timar",
-
-                    _ =>
-                        "Under éin time"
-                };
-        }
-
-        <section class="card guide-card mb-4" aria-labelledby="result-heading">
-
-            <div class="guide-card-header d-flex flex-column flex-md-row
-                justify-content-between align-items-md-center gap-3">
-
-                <div>
-                    <h2 id="result-heading" class="h4 mb-1">
-                        Status for mørninga
-                    </h2>
-
-                    <p class="text-body-secondary mb-0">
-                        Rekna fram til
-                        @result.CalculatedAt.ToString(
-                            "dd.MM.yyyy 'kl.' HH:mm")
-                    </p>
-                </div>
-
-                @if (result.TargetReached)
-                {
-                    <span class="badge rounded-pill text-bg-success fs-6">
-                        Målet er nådd
-                    </span>
-                }
-                else
-                {
-                    <span class="badge rounded-pill text-bg-primary fs-6">
-                        @result.ProgressPercent.ToString("0") % fullført
-                    </span>
-                }
-            </div>
-
-            <div class="guide-card-body">
-                @if (result.TargetReached)
-                {
-                    <div class="remaining-time-card
-                        remaining-time-card-complete mb-4" role="status">
-
-                        <div class="remaining-time-label">
-                            Status
-                        </div>
-
-                        <div class="remaining-time-value">
-                            Målet er nådd
-                        </div>
-
-                        <p class="remaining-time-description mb-0">
-                            Slaktet har passert målet på
-                            @result.TargetDegreeDays.ToString("0")
-                            døgngrader.
-                        </p>
-                    </div>
-                }
-                else if (forecast?.EstimatedTargetAt is DateTimeOffset estimatedTargetAt)
-                {
-                    <div class="remaining-time-card mb-4"
-                         role="status"
-                         aria-label="Venta tidspunkt for døgngradmålet">
-
-                        <div class="remaining-time-label">
-                            Venta ferdigmørna
-                        </div>
-
-                        <div class="remaining-time-value">
-                            @estimatedTargetAt.ToString(
-                                "dddd d. MMMM 'kl.' HH:mm")
-                        </div>
-
-                        <p class="remaining-time-description mb-0">
-                            Basert på målte døgngrader fram til no
-                            og temperaturprognosen frå MET.
-                        </p>
-                    </div>
-                }
-                else if (forecast is not null)
-                {
-                    <div class="remaining-time-card mb-4"
-                         role="status"
-                         aria-label="Døgngradprognose">
-
-                        <div class="remaining-time-label">
-                            Prognosen rekk ikkje heilt fram
-                        </div>
-
-                        <div class="remaining-time-value">
-                            @forecast.ProjectedTotalDegreeDays.ToString("0.0")
-                            DG ved prognoseslutt
-                        </div>
-
-                        <p class="remaining-time-description mb-0">
-                            Prognosen går fram til
-                            @forecast.ProjectionTo.ToString(
-                                "dddd d. MMMM 'kl.' HH:mm").
-
-                            Då står om lag
-                            @forecast.RemainingDegreeDays.ToString("0.0")
-                            døgngrader att.
-                        </p>
-                    </div>
-                }
-                else if (estimatedTimeText is not null)
-                {
-                    <div class="remaining-time-card mb-4"
-                         role="status"
-                         aria-label="Grovt estimert tid att til døgngradmålet">
-
-                        <div class="remaining-time-label">
-                            Estimert tid att
-                        </div>
-
-                        <div class="remaining-time-value">
-                            @estimatedTimeText
-                        </div>
-
-                        <p class="remaining-time-description mb-0">
-                            Temperaturprognosen kunne ikkje brukast.
-                            Dette er eit grovt estimat med same
-                            gjennomsnittstemperatur som fram til no.
-                        </p>
-                    </div>
-                }
-
-                <div class="row g-3 mb-4">
-                    <div class="col-md-4">
-                        <div class="summary-card">
-                            <div class="summary-label">
-                                Døgngrader
-                            </div>
-
-                            <div class="summary-value">
-                                @result.TotalDegreeDays.ToString("0.0")
-
-                                <span class="summary-target">
-                                    / @result.TargetDegreeDays.ToString("0")
-                                </span>
-                            </div>
-
-                            <div class="summary-subtext">
-                                @result.RemainingDegreeDays.ToString("0.0")
-                                døgngrader står att
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <div class="summary-card">
-                            <div class="summary-label">
-                                Tid sidan oppheng
-                            </div>
-
-                            <div class="summary-value">
-                                @result.ElapsedWholeDays døgn
-                            </div>
-
-                            <div class="summary-subtext">
-                                @result.ElapsedRemainingHours timar og
-                                @result.ElapsedRemainingMinutes minutt
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <div class="summary-card">
-                            <div class="summary-label">
-                                Snittemperatur
-                            </div>
-
-                            <div class="summary-value">
-                                @if (result.AverageTemperature.HasValue)
-                                {
-                                    @($"{result.AverageTemperature.Value:0.0} °C")
-                                }
-                                else
-                                {
-                                    <span>–</span>
-                                }
-                            </div>
-
-                            <div class="summary-subtext">
-                                For perioden med gyldige målingar
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="progress degree-progress mb-3" role="progressbar" aria-label="Framdrift mot valt døgngradmål"
-                     aria-valuenow="@progressWidth" aria-valuemin="0" aria-valuemax="100">
-
-                    <div class="progress-bar" style="width: @(progressWidth)%">
-                        @result.ProgressPercent.ToString("0") %
-                    </div>
-                </div>
-
-                @if (result.TargetReached)
-                {
-                    <div class="alert alert-success mb-4" role="status">
-                        <strong>
-                            Målet på
-                            @result.TargetDegreeDays.ToString("0")
-                            døgngrader er nådd.
-                        </strong>
-                    </div>
-                }
-                else
-                {
-                    <div class="alert alert-info mb-4" role="status">
-                        Det står att
-
-                        <strong>
-                            @result.RemainingDegreeDays.ToString("0.0")
-                            døgngrader
-                        </strong>
-
-                        til målet på
-                        @result.TargetDegreeDays.ToString("0").
-                    </div>
-                }
-
-                @if (result.ExcludedDayCount > 0)
-                {
-                    <div class="alert alert-warning mb-4" role="alert">
-                        Nokre periodar manglar tilstrekkelege
-                        temperaturmålingar. Utrekninga kan derfor vere
-                        mindre presis.
-                    </div>
-                }
-
-                <hr class="my-4" />
-
-                <h3 class="h5 mb-3">
-                    Detaljar
-                </h3>
-
-                <dl class="row result-details mb-0">
-                    <dt class="col-sm-5 col-lg-4">
-                        Hengt opp
-                    </dt>
-
-                    <dd class="col-sm-7 col-lg-8">
-                        @result.HungAt.ToString(
-                            "dd.MM.yyyy 'kl.' HH:mm")
-                    </dd>
-
-                    <dt class="col-sm-5 col-lg-4">
-                        Rekna fram til
-                    </dt>
-
-                    <dd class="col-sm-7 col-lg-8">
-                        @result.CalculatedAt.ToString(
-                            "dd.MM.yyyy 'kl.' HH:mm")
-                    </dd>
-
-                    <dt class="col-sm-5 col-lg-4">
-                        Målestasjon
-                    </dt>
-
-                    <dd class="col-sm-7 col-lg-8">
-                        @result.SourceName
-
-                        <span class="text-body-secondary">
-                            (@result.SourceId)
-                        </span>
-                    </dd>
-
-                    @if (result.StationMetresAboveSeaLevel.HasValue)
-                    {
-                        <dt class="col-sm-5 col-lg-4">
-                            Stasjonshøgd
-                        </dt>
-
-                        <dd class="col-sm-7 col-lg-8">
-                            @result.StationMetresAboveSeaLevel.Value.ToString("0")
-                            moh.
-                        </dd>
-                    }
-                </dl>
-            </div>
-        </section>
-
-        <section class="card guide-card mb-4" aria-labelledby="daily-values-heading">
-
-            <div class="guide-card-header">
-                <h2 id="daily-values-heading" class="h4 mb-1">
-                    Døgnverdiar
-                </h2>
-
-                <p class="text-body-secondary mb-0">
-                    Temperatur og opptente døgngrader per dag.
-                </p>
-            </div>
-
-            <div class="table-responsive">
-                <table class="table table-hover day-table mb-0">
-                    <caption class="visually-hidden">
-                        Døgnverdiar for temperatur og opptente døgngrader.
-                    </caption>
-
-                    <thead class="table-light">
-                        <tr>
-                            <th scope="col" class="ps-4">
-                                Dato og periode
-                            </th>
-
-                            <th scope="col" class="text-end">
-                                Temperatur
-                            </th>
-
-                            <th scope="col" class="text-end">
-                                Døgngrader
-                            </th>
-
-                            <th scope="col" class="text-end pe-4">
-                                Samla
-                            </th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        @foreach (var day in result.Days)
-                        {
-                            <tr>
-                                <td class="ps-4">
-                                    <div class="fw-semibold">
-                                        @day.Date.ToString("dd.MM.yyyy")
-                                    </div>
-
-                                    <small class="text-body-secondary">
-                                        kl. @day.PeriodStart.ToString("HH:mm")
-                                        til @day.PeriodEnd.ToString("HH:mm")
-                                    </small>
-                                </td>
-
-                                <td class="text-end">
-                                    @if (day.MeanTemperature.HasValue)
-                                    {
-                                        @($"{day.MeanTemperature.Value:0.0} °C")
-                                    }
-                                    else
-                                    {
-                                        <span class="text-body-secondary">
-                                            –
-                                        </span>
-                                    }
-                                </td>
-
-                                <td class="text-end fw-semibold">
-                                    @day.DegreeDays.ToString("0.00")
-                                </td>
-
-                                <td class="text-end fw-semibold pe-4">
-                                    @day.AccumulatedDegreeDays.ToString("0.00")
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    }
 </div>
 
 @section Scripts
 {
     <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        (() => {
+            const refrigeratorCheckbox =
+                document.getElementById(
+                    "Input_HasBeenRefrigerated");
+
+            const refrigeratorContainer =
+                document.getElementById(
+                    "refrigerator-date-container");
+
+            const refrigeratorDateInput =
+                document.getElementById(
+                    "Input_RefrigeratedFromDate");
+
+            const hungDateInput =
+                document.getElementById(
+                    "Input_HungDate");
+
+            if (!refrigeratorCheckbox ||
+                !refrigeratorContainer ||
+                !refrigeratorDateInput) {
+                return;
+            }
+
+            const updateRefrigeratorFields = () => {
+                const isRefrigerated =
+                    refrigeratorCheckbox.checked;
+
+                refrigeratorContainer.classList.toggle(
+                    "d-none",
+                    !isRefrigerated);
+
+                refrigeratorDateInput.disabled =
+                    !isRefrigerated;
+
+                refrigeratorDateInput.required =
+                    isRefrigerated;
+
+                refrigeratorDateInput.setAttribute(
+                    "aria-required",
+                    isRefrigerated
+                        ? "true"
+                        : "false");
+
+                /*
+                 * Kjøleskapsdatoen kan ikkje vere før
+                 * opphengsdatoen.
+                 *
+                 * Dette er berre brukarhjelp i nettlesaren.
+                 * MorningController validerer den same regelen
+                 * på serversida.
+                 */
+                if (hungDateInput?.value) {
+                    refrigeratorDateInput.min =
+                        hungDateInput.value;
+                }
+                else {
+                    refrigeratorDateInput.removeAttribute(
+                        "min");
+                }
+
+                /*
+                 * Dersom brukaren slår av kjøleskapsvalet,
+                 * fjernar me ikkje datoen her.
+                 *
+                 * Då kan brukaren slå valet på att utan å
+                 * måtte velje dato på nytt. Feltet blir ikkje
+                 * sendt når det er disabled, og controlleren
+                 * nullstiller verdien når valet er av.
+                 */
+            };
+
+            refrigeratorCheckbox.addEventListener(
+                "change",
+                updateRefrigeratorFields);
+
+            hungDateInput?.addEventListener(
+                "change",
+                updateRefrigeratorFields);
+
+            updateRefrigeratorFields();
+        })();
+    </script>
 }

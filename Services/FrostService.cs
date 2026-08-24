@@ -10,6 +10,8 @@ namespace VigdalsMorningsguide.Services;
 
 public sealed class FrostService
 {
+    private const double RefrigeratorTemperatureCelsius = 4.0;
+
     private static readonly TimeZoneInfo NorwegianTimeZone =
         TimeZoneInfo.FindSystemTimeZoneById("Europe/Oslo");
 
@@ -37,6 +39,7 @@ public sealed class FrostService
         DateTime hungAt,
         double targetDegreeDays,
         WeatherStationModel station,
+        DateTime? refrigeratedAt,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(station);
@@ -77,6 +80,26 @@ public sealed class FrostService
             hungAtLocal,
             nowLocal);
 
+        DateTime? refrigeratedAtLocal = null;
+        DateTimeOffset? refrigeratedAtUtc = null;
+
+        if (refrigeratedAt.HasValue)
+        {
+            refrigeratedAtLocal =
+                DateTime.SpecifyKind(
+                    refrigeratedAt.Value,
+                    DateTimeKind.Unspecified);
+
+            ValidateRefrigeratedAt(
+                refrigeratedAtLocal.Value,
+                hungAtLocal,
+                nowLocal);
+
+            refrigeratedAtUtc =
+                ConvertLocalToUtc(
+                    refrigeratedAtLocal.Value);
+        }
+
         var hungAtUtc =
             ConvertLocalToUtc(
                 hungAtLocal);
@@ -85,15 +108,21 @@ public sealed class FrostService
          * Me hentar éi måling før opphengstidspunktet slik at
          * me kan rekne intervallet frå nøyaktig opphengstid.
          *
-         * Me hentar òg litt etter no. Frost returnerer berre
-         * målingar som faktisk finst.
+         * Dersom kjøtet er lagt i kjøleskap, treng me berre
+         * Frost-data fram til kjøleskapstidspunktet.
          */
         var queryFromUtc =
             hungAtUtc.AddMinutes(
                 -_options.MeasurementIntervalMinutes);
 
+        var observationEndUtc =
+            refrigeratedAtUtc.HasValue &&
+            refrigeratedAtUtc.Value < nowUtc
+                ? refrigeratedAtUtc.Value
+                : nowUtc;
+
         var queryToUtc =
-            nowUtc.AddMinutes(
+            observationEndUtc.AddMinutes(
                 _options.MeasurementIntervalMinutes);
 
         var referenceTime =
@@ -107,7 +136,8 @@ public sealed class FrostService
 
         _logger.LogInformation(
             "Hentar temperaturdata frå {SourceId} ({SourceName}). " +
-            "Oppheng: {HungAt}. Utrekning: {CalculatedAt}.",
+            "Oppheng: {HungAt}. Utrekning: {CalculatedAt}. " +
+            "Kjøleskap frå: {RefrigeratedAt}.",
             station.SourceId,
             station.Name,
             hungAtLocal.ToString(
@@ -115,7 +145,11 @@ public sealed class FrostService
                 CultureInfo.InvariantCulture),
             nowLocal.ToString(
                 "yyyy-MM-dd HH:mm",
-                CultureInfo.InvariantCulture));
+                CultureInfo.InvariantCulture),
+            refrigeratedAtLocal?.ToString(
+                "yyyy-MM-dd HH:mm",
+                CultureInfo.InvariantCulture)
+            ?? "ikkje registrert");
 
         using var request =
             new HttpRequestMessage(
@@ -173,7 +207,8 @@ public sealed class FrostService
             hungAtUtc,
             nowUtc,
             targetDegreeDays,
-            station);
+            station,
+            refrigeratedAtLocal);
     }
 
     private static List<TemperatureMeasurement> ExtractMeasurements(
@@ -221,7 +256,8 @@ public sealed class FrostService
         DateTimeOffset periodStartUtc,
         DateTimeOffset periodEndUtc,
         double targetDegreeDays,
-        WeatherStationModel station)
+        WeatherStationModel station,
+        DateTime? refrigeratedAtLocal)
     {
         var dailyResults =
             new List<MorningDayModel>();
@@ -233,6 +269,9 @@ public sealed class FrostService
             0.0;
 
         var includedCoveredHours =
+            0.0;
+
+        var totalCoveredHours =
             0.0;
 
         var firstDate =
@@ -285,75 +324,250 @@ public sealed class FrostService
                 ConvertLocalToUtc(
                     segmentEndLocal);
 
-            var integration =
-                IntegrateMeasurements(
-                    measurements,
-                    segmentStartUtc,
-                    segmentEndUtc);
-
             var segmentDurationHours =
                 (segmentEndUtc - segmentStartUtc)
                 .TotalHours;
+
+            /*
+             * Ein kalenderdag kan bestå av to periodar:
+             *
+             * 1. Utandørsperioden, rekna frå Frost.
+             * 2. Kjøleskapsperioden, rekna med fast 4 °C.
+             *
+             * Dette er særleg viktig på sjølve dagen kjøtet
+             * blir lagt i kjøleskap.
+             */
+            var outdoorStartLocal =
+                segmentStartLocal;
+
+            var outdoorEndLocal =
+                segmentEndLocal;
+
+            if (refrigeratedAtLocal.HasValue &&
+                refrigeratedAtLocal.Value < outdoorEndLocal)
+            {
+                outdoorEndLocal =
+                    refrigeratedAtLocal.Value;
+            }
+
+            if (outdoorEndLocal < outdoorStartLocal)
+            {
+                outdoorEndLocal =
+                    outdoorStartLocal;
+            }
+
+            DateTime? refrigeratorStartLocal =
+                null;
+
+            if (refrigeratedAtLocal.HasValue &&
+                refrigeratedAtLocal.Value < segmentEndLocal)
+            {
+                refrigeratorStartLocal =
+                    refrigeratedAtLocal.Value > segmentStartLocal
+                        ? refrigeratedAtLocal.Value
+                        : segmentStartLocal;
+            }
+
+            /*
+             * Først reknar me delen av dagen som var utandørs.
+             */
+            var outdoorDegreeDays =
+                0.0;
+
+            var outdoorWeightedTemperatureHours =
+                0.0;
+
+            var outdoorCoveredHours =
+                0.0;
+
+            var outdoorDurationHours =
+                0.0;
+
+            var outdoorIncluded =
+                true;
+
+            var observationCount =
+                0;
+
+            var expectedObservationCount =
+                0;
+
+            var qualityCodes =
+                new List<int>();
+
+            if (outdoorEndLocal > outdoorStartLocal)
+            {
+                var outdoorStartUtc =
+                    ConvertLocalToUtc(
+                        outdoorStartLocal);
+
+                var outdoorEndUtc =
+                    ConvertLocalToUtc(
+                        outdoorEndLocal);
+
+                outdoorDurationHours =
+                    (outdoorEndUtc - outdoorStartUtc)
+                    .TotalHours;
+
+                var integration =
+                    IntegrateMeasurements(
+                        measurements,
+                        outdoorStartUtc,
+                        outdoorEndUtc);
+
+                var outdoorCoveragePercent =
+                    outdoorDurationHours <= 0
+                        ? 0
+                        : Math.Min(
+                            100,
+                            integration.CoveredHours /
+                            outdoorDurationHours *
+                            100);
+
+                outdoorIncluded =
+                    integration.CoveredHours > 0 &&
+                    outdoorCoveragePercent >=
+                    _options.MinimumCoveragePercent;
+
+                totalCoveredHours +=
+                    integration.CoveredHours;
+
+                if (outdoorIncluded)
+                {
+                    outdoorDegreeDays =
+                        integration.DegreeDays;
+
+                    outdoorWeightedTemperatureHours =
+                        integration.WeightedTemperatureHours;
+
+                    outdoorCoveredHours =
+                        integration.CoveredHours;
+
+                    includedWeightedTemperatureHours +=
+                        integration.WeightedTemperatureHours;
+
+                    includedCoveredHours +=
+                        integration.CoveredHours;
+                }
+
+                observationCount =
+                    measurements.Count(measurement =>
+                        measurement.UtcTimestamp >= outdoorStartUtc &&
+                        measurement.UtcTimestamp < outdoorEndUtc);
+
+                expectedObservationCount =
+                    CalculateExpectedObservationCount(
+                        outdoorStartUtc,
+                        outdoorEndUtc);
+
+                qualityCodes =
+                    measurements
+                        .Where(measurement =>
+                            measurement.UtcTimestamp >= outdoorStartUtc &&
+                            measurement.UtcTimestamp < outdoorEndUtc &&
+                            measurement.QualityCode.HasValue)
+                        .Select(measurement =>
+                            measurement.QualityCode!.Value)
+                        .Distinct()
+                        .OrderBy(code =>
+                            code)
+                        .ToList();
+            }
+
+            /*
+             * Deretter reknar me eventuell kjøleskapsdel.
+             */
+            var refrigeratorDegreeDays =
+                0.0;
+
+            var refrigeratorWeightedTemperatureHours =
+                0.0;
+
+            var refrigeratorHours =
+                0.0;
+
+            if (refrigeratorStartLocal.HasValue)
+            {
+                var refrigeratorStartUtc =
+                    ConvertLocalToUtc(
+                        refrigeratorStartLocal.Value);
+
+                refrigeratorHours =
+                    (segmentEndUtc - refrigeratorStartUtc)
+                    .TotalHours;
+
+                if (refrigeratorHours > 0)
+                {
+                    refrigeratorDegreeDays =
+                        RefrigeratorTemperatureCelsius *
+                        refrigeratorHours /
+                        24.0;
+
+                    refrigeratorWeightedTemperatureHours =
+                        RefrigeratorTemperatureCelsius *
+                        refrigeratorHours;
+
+                    /*
+                     * Kjøleskapstemperaturen er definert som kjend,
+                     * så denne perioden har full dekning.
+                     */
+                    totalCoveredHours +=
+                        refrigeratorHours;
+
+                    includedWeightedTemperatureHours +=
+                        refrigeratorWeightedTemperatureHours;
+
+                    includedCoveredHours +=
+                        refrigeratorHours;
+                }
+            }
+
+            /*
+             * Summen for dagen består av begge periodane.
+             */
+            var degreeDays =
+                outdoorDegreeDays +
+                refrigeratorDegreeDays;
+
+            accumulatedDegreeDays +=
+                degreeDays;
+
+            var dayCoveredHours =
+                outdoorCoveredHours +
+                refrigeratorHours;
+
+            var dayWeightedTemperatureHours =
+                outdoorWeightedTemperatureHours +
+                refrigeratorWeightedTemperatureHours;
+
+            double? meanTemperature =
+                dayCoveredHours <= 0
+                    ? null
+                    : dayWeightedTemperatureHours /
+                      dayCoveredHours;
 
             var coveragePercent =
                 segmentDurationHours <= 0
                     ? 0
                     : Math.Min(
                         100,
-                        integration.CoveredHours /
+                        (
+                            outdoorCoveredHours +
+                            refrigeratorHours
+                        ) /
                         segmentDurationHours *
                         100);
 
+            /*
+             * Dersom dagen hadde ein utandørsperiode som mangla
+             * tilstrekkelege Frost-data, markerer me dagen som
+             * ufullstendig sjølv om kjøleskapsdelen er gyldig.
+             *
+             * Kjøleskapsdelen blir likevel rekna med.
+             */
             var includedInTotal =
-                integration.CoveredHours > 0 &&
-                coveragePercent >=
-                _options.MinimumCoveragePercent;
-
-            var degreeDays =
-                includedInTotal
-                    ? integration.DegreeDays
-                    : 0;
-
-            accumulatedDegreeDays +=
-                degreeDays;
-
-            if (includedInTotal)
-            {
-                includedWeightedTemperatureHours +=
-                    integration.WeightedTemperatureHours;
-
-                includedCoveredHours +=
-                    integration.CoveredHours;
-            }
-
-            double? meanTemperature =
-                integration.CoveredHours <= 0
-                    ? null
-                    : integration.WeightedTemperatureHours /
-                      integration.CoveredHours;
-
-            var observationCount =
-                measurements.Count(measurement =>
-                    measurement.UtcTimestamp >= segmentStartUtc &&
-                    measurement.UtcTimestamp < segmentEndUtc);
-
-            var expectedObservationCount =
-                CalculateExpectedObservationCount(
-                    segmentStartUtc,
-                    segmentEndUtc);
-
-            var qualityCodes =
-                measurements
-                    .Where(measurement =>
-                        measurement.UtcTimestamp >= segmentStartUtc &&
-                        measurement.UtcTimestamp < segmentEndUtc &&
-                        measurement.QualityCode.HasValue)
-                    .Select(measurement =>
-                        measurement.QualityCode!.Value)
-                    .Distinct()
-                    .OrderBy(code =>
-                        code)
-                    .ToList();
+                outdoorDurationHours <= 0 ||
+                outdoorIncluded;
 
             dailyResults.Add(
                 new MorningDayModel
@@ -382,6 +596,9 @@ public sealed class FrostService
                     IncludedInTotal =
                         includedInTotal,
 
+                    UsesRefrigeratorTemperature =
+                        refrigeratorHours > 0,
+
                     DegreeDays =
                         degreeDays,
 
@@ -393,12 +610,6 @@ public sealed class FrostService
                 });
         }
 
-        var totalPeriodIntegration =
-            IntegrateMeasurements(
-                measurements,
-                periodStartUtc,
-                periodEndUtc);
-
         var totalPeriodHours =
             (periodEndUtc - periodStartUtc)
             .TotalHours;
@@ -408,7 +619,7 @@ public sealed class FrostService
                 ? 0
                 : Math.Min(
                     100,
-                    totalPeriodIntegration.CoveredHours /
+                    totalCoveredHours /
                     totalPeriodHours *
                     100);
 
@@ -433,6 +644,14 @@ public sealed class FrostService
 
             CalculatedAtUtc =
                 periodEndUtc,
+
+            RefrigeratedAt =
+                refrigeratedAtLocal,
+
+            RefrigeratorTemperatureCelsius =
+                refrigeratedAtLocal.HasValue
+                    ? RefrigeratorTemperatureCelsius
+                    : null,
 
             SourceId =
                 station.SourceId,
@@ -650,6 +869,45 @@ public sealed class FrostService
             throw new ArgumentException(
                 "Den valde målestasjonen manglar tidsforskyving.",
                 nameof(station));
+        }
+    }
+
+    private static void ValidateRefrigeratedAt(
+        DateTime refrigeratedAtLocal,
+        DateTime hungAtLocal,
+        DateTime nowLocal)
+    {
+        if (refrigeratedAtLocal < hungAtLocal)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(refrigeratedAtLocal),
+                "Kjøleskapsdatoen kan ikkje vere før " +
+                "opphengstidspunktet.");
+        }
+
+        if (refrigeratedAtLocal > nowLocal)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(refrigeratedAtLocal),
+                "Kjøleskapsdatoen kan ikkje vere fram i tid.");
+        }
+
+        if (NorwegianTimeZone.IsInvalidTime(
+                refrigeratedAtLocal))
+        {
+            throw new ArgumentException(
+                "Kjøleskapstidspunktet finst ikkje på grunn av " +
+                "overgang til sommartid.",
+                nameof(refrigeratedAtLocal));
+        }
+
+        if (NorwegianTimeZone.IsAmbiguousTime(
+                refrigeratedAtLocal))
+        {
+            throw new ArgumentException(
+                "Kjøleskapstidspunktet er tvitydig på grunn av " +
+                "overgang frå sommartid.",
+                nameof(refrigeratedAtLocal));
         }
     }
 

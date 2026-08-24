@@ -26,10 +26,35 @@ public sealed class MorningInputModel
         ErrorMessage = "Målet må vere mellom 1 og 120 døgngrader.")]
     public double TargetDegreeDays { get; set; } = 80;
 
+    [Display(
+        Name = "Har du lagt kjøtet i kjøleskap i løpet av mørningsperioden?")]
+    public bool HasBeenRefrigerated { get; set; }
+
+    [Display(Name = "Dato lagt i kjøleskap")]
+    public DateOnly? RefrigeratedFromDate { get; set; }
+
+    [Display(Name = "Klokkeslett lagt i kjøleskap")]
+    public TimeOnly? RefrigeratedFromTime { get; set; }
+
     public DateTime GetHungAt()
     {
         return DateTime.SpecifyKind(
             HungDate.ToDateTime(HungTime),
+            DateTimeKind.Unspecified);
+    }
+
+    public DateTime? GetRefrigeratedAt()
+    {
+        if (!HasBeenRefrigerated ||
+            !RefrigeratedFromDate.HasValue ||
+            !RefrigeratedFromTime.HasValue)
+        {
+            return null;
+        }
+
+        return DateTime.SpecifyKind(
+            RefrigeratedFromDate.Value.ToDateTime(
+                RefrigeratedFromTime.Value),
             DateTimeKind.Unspecified);
     }
 }

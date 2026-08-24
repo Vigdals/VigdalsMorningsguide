@@ -1,6 +1,7 @@
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using System.Text.Json;
 using VigdalsMorningsguide.Models;
 using VigdalsMorningsguide.Services;
 
@@ -8,6 +9,9 @@ namespace VigdalsMorningsguide.Controllers;
 
 public sealed class MorningController : Controller
 {
+    private static readonly TimeZoneInfo NorwegianTimeZone =
+        TimeZoneInfo.FindSystemTimeZoneById("Europe/Oslo");
+
     private readonly FrostService _frostService;
     private readonly FrostStationService _stationService;
     private readonly MetForecastService _metForecastService;
@@ -46,8 +50,13 @@ public sealed class MorningController : Controller
     public async Task<IActionResult> Index(
         CancellationToken cancellationToken)
     {
+        var nowNorwegian =
+            TimeZoneInfo.ConvertTime(
+                DateTimeOffset.UtcNow,
+                NorwegianTimeZone);
+
         var defaultTime =
-            DateTime.Now.AddDays(-2);
+            nowNorwegian.DateTime.AddDays(-2);
 
         var model =
             new MorningPageViewModel
@@ -68,7 +77,13 @@ public sealed class MorningController : Controller
                                 .DefaultSourceId,
 
                         TargetDegreeDays =
-                            80
+                            80,
+
+                        HasBeenRefrigerated =
+                            false,
+
+                        RefrigeratedFromDate =
+                            null
                     }
             };
 
@@ -114,6 +129,16 @@ public sealed class MorningController : Controller
                 model,
                 cancellationToken);
 
+            /*
+             * Kjøleskapsdatoen er berre obligatorisk dersom
+             * brukaren har oppgitt at kjøtet er lagt i kjøleskap.
+             *
+             * Denne valideringa må derfor gjerast manuelt,
+             * sidan RefrigeratedFromDate i modellen er nullable.
+             */
+            ValidateRefrigerationInput(
+                model);
+
             if (!ModelState.IsValid)
             {
                 return View(
@@ -137,6 +162,9 @@ public sealed class MorningController : Controller
             var hungAt =
                 model.Input.GetHungAt();
 
+            var refrigeratedAt =
+                model.Input.GetRefrigeratedAt();
+
             var station =
                 await _stationService.ResolveStationAsync(
                     selectedStation,
@@ -154,19 +182,47 @@ public sealed class MorningController : Controller
                     model);
             }
 
+            /*
+             * FrostService brukar målte temperaturar fram til
+             * refrigeratedAt.
+             *
+             * Dersom refrigeratedAt er sett, blir temperaturen
+             * rekna som fast 4 °C frå dette tidspunktet.
+             */
             model.Result =
                 await _frostService.CalculateAsync(
                     hungAt,
                     model.Input.TargetDegreeDays,
                     station,
+                    refrigeratedAt,
                     cancellationToken);
 
             if (!model.Result.TargetReached)
             {
-                await PopulateForecastAsync(
-                    model,
-                    station,
-                    cancellationToken);
+                /*
+                 * Når kjøtet ligg i kjøleskap kjenner me
+                 * temperaturen framover og skal derfor ikkje
+                 * bruke MET-prognosen.
+                 *
+                 * I staden reknar me vidare med den faste
+                 * kjøleskapstemperaturen.
+                 */
+                if (model.Result.RefrigeratorTemperatureCelsius
+                    is double refrigeratorTemperature)
+                {
+                    model.Forecast =
+                        _morningForecastService
+                            .CalculateAtConstantTemperature(
+                                model.Result,
+                                refrigeratorTemperature);
+                }
+                else
+                {
+                    await PopulateForecastAsync(
+                        model,
+                        station,
+                        cancellationToken);
+                }
             }
 
             return View(
@@ -336,6 +392,57 @@ public sealed class MorningController : Controller
         }
     }
 
+    private void ValidateRefrigerationInput(
+        MorningPageViewModel model)
+    {
+        /*
+         * Dersom brukaren ikkje har kryssa av for kjøleskap,
+         * skal ein eventuell gammal verdi frå skjemaet ikkje
+         * få påverke utrekninga.
+         */
+        if (!model.Input.HasBeenRefrigerated)
+        {
+            model.Input.RefrigeratedFromDate =
+                null;
+
+            return;
+        }
+
+        if (!model.Input.RefrigeratedFromDate.HasValue)
+        {
+            ModelState.AddModelError(
+                "Input.RefrigeratedFromDate",
+                "Vel datoen kjøtet vart lagt i kjøleskap.");
+
+            return;
+        }
+
+        if (model.Input.RefrigeratedFromDate.Value <
+            model.Input.HungDate)
+        {
+            ModelState.AddModelError(
+                "Input.RefrigeratedFromDate",
+                "Kjøleskapsdatoen kan ikkje vere før " +
+                "opphengsdatoen.");
+        }
+
+        var nowNorwegian =
+            TimeZoneInfo.ConvertTime(
+                DateTimeOffset.UtcNow,
+                NorwegianTimeZone);
+
+        var today =
+            DateOnly.FromDateTime(
+                nowNorwegian.DateTime);
+
+        if (model.Input.RefrigeratedFromDate.Value >
+            today)
+        {
+            ModelState.AddModelError(
+                "Input.RefrigeratedFromDate",
+                "Kjøleskapsdatoen kan ikkje vere fram i tid.");
+        }
+    }
     private static void PopulateStationOptions(
         MorningPageViewModel model)
     {

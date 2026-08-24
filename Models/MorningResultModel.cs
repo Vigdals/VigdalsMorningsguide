@@ -7,6 +7,8 @@ public sealed class MorningResultModel
     public DateTime CalculatedAt { get; init; }
 
     public DateTimeOffset CalculatedAtUtc { get; init; }
+    public DateTime? RefrigeratedAt { get; init; }
+    public double? RefrigeratorTemperatureCelsius { get; init; }
     public string SourceId { get; init; } =
         string.Empty;
 
@@ -99,6 +101,8 @@ public sealed class MorningDayModel
     public double CoveragePercent { get; init; }
 
     public bool IncludedInTotal { get; init; }
+
+    public bool UsesRefrigeratorTemperature { get; init; }
 
     public double DegreeDays { get; init; }
 

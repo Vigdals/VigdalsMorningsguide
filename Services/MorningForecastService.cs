@@ -8,6 +8,84 @@ public sealed class MorningForecastService
         TimeZoneInfo.FindSystemTimeZoneById(
             "Europe/Oslo");
 
+    public MorningForecastModel? CalculateAtConstantTemperature(
+        MorningResultModel result,
+        double temperatureCelsius)
+    {
+        ArgumentNullException.ThrowIfNull(
+            result);
+
+        if (!double.IsFinite(
+                temperatureCelsius) ||
+            temperatureCelsius <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(temperatureCelsius),
+                "Temperaturen må vere større enn 0 °C.");
+        }
+
+        if (result.TargetReached ||
+            result.RemainingDegreeDays <= 0)
+        {
+            return null;
+        }
+
+        /*
+         * Døgngrader =
+         * temperatur × timar / 24.
+         *
+         * Dermed:
+         * timar =
+         * resterande døgngrader / temperatur × 24.
+         */
+        var hoursNeeded =
+            result.RemainingDegreeDays /
+            temperatureCelsius *
+            24.0;
+
+        var projectionFromUtc =
+            result.CalculatedAtUtc
+                .ToUniversalTime();
+
+        var estimatedTargetUtc =
+            projectionFromUtc.AddHours(
+                hoursNeeded);
+
+        var projectionFromLocal =
+            TimeZoneInfo.ConvertTime(
+                projectionFromUtc,
+                NorwegianTimeZone);
+
+        var estimatedTargetLocal =
+            TimeZoneInfo.ConvertTime(
+                estimatedTargetUtc,
+                NorwegianTimeZone);
+
+        return new MorningForecastModel
+        {
+            ProjectionFrom =
+                projectionFromLocal,
+
+            ProjectionTo =
+                estimatedTargetLocal,
+
+            EstimatedTargetAt =
+                estimatedTargetLocal,
+
+            StartingDegreeDays =
+                result.TotalDegreeDays,
+
+            ForecastDegreeDays =
+                result.RemainingDegreeDays,
+
+            TargetDegreeDays =
+                result.TargetDegreeDays,
+
+            ForecastPointCount =
+                0
+        };
+    }
+
     public MorningForecastModel? Calculate(
         MorningResultModel result,
         IReadOnlyList<ForecastTemperaturePoint> forecastPoints)
