@@ -460,4 +460,10 @@ public sealed class MorningController : Controller
                         })
                 .ToList();
     }
+
+    [HttpGet] 
+    public IActionResult Guide()
+    {
+        return View();
+    }
 }
