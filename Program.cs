@@ -10,6 +10,7 @@ var builder =
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<ShellyCloudRequestGate>();
 var nynorskCulture =
     new CultureInfo(
         "nn-NO");
@@ -91,6 +92,11 @@ builder.Services
         "Shelly:AuthKey manglar.")
     .Validate(
         options =>
+            !string.IsNullOrWhiteSpace(
+                options.DisplayName),
+        "Shelly:DisplayName manglar.")
+    .Validate(
+        options =>
             options.CacheSeconds
             is >= 1 and <= 300,
         "Shelly:CacheSeconds må vere mellom 1 og 300.")
@@ -99,6 +105,19 @@ builder.Services
             options.StaleAfterMinutes
             is >= 1 and <= 1440,
         "Shelly:StaleAfterMinutes må vere mellom 1 og 1440.")
+    .Validate(
+        options =>
+            options.MinimumCoveragePercent
+            is >= 0 and <= 100,
+        "Shelly:MinimumCoveragePercent må vere mellom 0 og 100.")
+    .Validate(
+        options =>
+            options.MaximumAcceptedGapMinutes > 0,
+        "Shelly:MaximumAcceptedGapMinutes må vere større enn null.")
+    .Validate(
+        options =>
+            options.MaximumDaysBack > 0,
+        "Shelly:MaximumDaysBack må vere større enn null.")
     .ValidateOnStart();
 
 static void ConfigureFrostClient(
@@ -177,6 +196,19 @@ static void ConfigureShellyClient(
             "VigdalsMorningsguide/1.0");
 }
 
+static void ConfigureShellyHistoryClient(
+    IServiceProvider serviceProvider,
+    HttpClient httpClient)
+{
+    ConfigureShellyClient(
+        serviceProvider,
+        httpClient);
+
+    httpClient.Timeout =
+        TimeSpan.FromSeconds(
+            30);
+}
+
 builder.Services.AddHttpClient<FrostService>(
     ConfigureFrostClient);
 builder.Services.AddHttpClient<FrostStationService>(
@@ -185,8 +217,11 @@ builder.Services.AddHttpClient<MetForecastService>(
     ConfigureMetForecastClient);
 builder.Services.AddHttpClient<ShellyService>(
     ConfigureShellyClient);
+builder.Services.AddHttpClient<ShellyHistoryService>(
+    ConfigureShellyHistoryClient);
 
 builder.Services.AddSingleton<MorningForecastService>();
+builder.Services.AddSingleton<DegreeDayCalculationService>();
 
 var app =
     builder.Build();

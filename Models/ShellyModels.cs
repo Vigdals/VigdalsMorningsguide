@@ -121,6 +121,89 @@ public sealed class ShellySystemStatusModel
     public int? WakeupPeriodSeconds { get; init; }
 }
 
+public sealed class ShellyWeatherStatisticsResponse
+{
+    [JsonPropertyName("timezone")]
+    public string? TimeZone { get; init; }
+
+    [JsonPropertyName("interval")]
+    public string? Interval { get; init; }
+
+    [JsonPropertyName("history_interval")]
+    public string? HistoryInterval { get; init; }
+
+    [JsonPropertyName("history")]
+    public List<ShellyWeatherHistoryEntry>? History { get; init; }
+}
+
+public sealed class ShellyWeatherHistoryEntry
+{
+    [JsonPropertyName("datetime")]
+    public string Timestamp { get; init; } =
+        string.Empty;
+
+    [JsonPropertyName("available")]
+    public bool? IsAvailable { get; init; }
+
+    [JsonPropertyName("min_temperature")]
+    public double? MinimumTemperatureCelsius { get; init; }
+
+    [JsonPropertyName("max_temperature")]
+    public double? MaximumTemperatureCelsius { get; init; }
+
+    [JsonPropertyName("avg_temperature")]
+    public double? AverageTemperatureCelsius { get; init; }
+
+    [JsonPropertyName("temperature")]
+    public double? TemperatureCelsius { get; init; }
+
+    [JsonPropertyName("humidity")]
+    public double? RelativeHumidity { get; init; }
+
+    [JsonPropertyName("missing")]
+    public bool? IsMissing { get; init; }
+
+    public double? MeanTemperatureCelsius
+    {
+        get
+        {
+            if (AverageTemperatureCelsius is double average &&
+                double.IsFinite(average))
+            {
+                return average;
+            }
+
+            if (TemperatureCelsius is double temperature &&
+                double.IsFinite(temperature))
+            {
+                return temperature;
+            }
+
+            if (MinimumTemperatureCelsius is double minimum &&
+                MaximumTemperatureCelsius is double maximum &&
+                double.IsFinite(minimum) &&
+                double.IsFinite(maximum))
+            {
+                return (minimum + maximum) / 2.0;
+            }
+
+            if (MinimumTemperatureCelsius is double minimumOnly &&
+                double.IsFinite(minimumOnly))
+            {
+                return minimumOnly;
+            }
+
+            if (MaximumTemperatureCelsius is double maximumOnly &&
+                double.IsFinite(maximumOnly))
+            {
+                return maximumOnly;
+            }
+
+            return null;
+        }
+    }
+}
+
 public sealed class ShellyMeasurementModel
 {
     public double? TemperatureCelsius { get; init; }

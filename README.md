@@ -15,6 +15,7 @@ Pi](https://img.shields.io/badge/Raspberry_Pi-Hosted-C51A4A)
 
 - 🦌 Reknar ut døgngrader for optimal mørning
 - Hentar historiske temperaturar frå Frost API
+- Brukar historiske temperaturar frå Shelly som valbar lokal målar
 - 🐳 Docker-basert drift
 - HTTPS med Let's Encrypt
 - Automatisk deploy frå GitHub
@@ -88,8 +89,14 @@ docker compose up --build
 Eller:
 
 ```bash
+dotnet user-secrets set "Frost:ClientId" "<client-id>"
+dotnet user-secrets set "Shelly:BaseUrl" "https://shelly-xx-eu.shelly.cloud"
+dotnet user-secrets set "Shelly:DeviceId" "<device-id>"
+dotnet user-secrets set "Shelly:AuthKey" "<auth-key>"
 dotnet run
 ```
+
+Ikkje legg Shelly-nøkkelen i `appsettings.json` eller i Git.
 
 ---
 
@@ -158,7 +165,8 @@ VigdalsMorningsguide/
 
 # Planlagde funksjonar
 
-- [x] Lokal temperatur og luftfuktigheit frå Shelly eller ESP32 (delvis implementert)
+- [x] Lokal temperatur og luftfuktigheit frå Shelly
+- [x] Shelly som temperaturkjelde i mørningskalkulatoren
 - [x] Valg om kjøleskapsmørning
 - [ ] Infoside om mørningsguide med anbefalingar
 - [ ] Varsling når kjøtet er ferdigmørna via e-post
