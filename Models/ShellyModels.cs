@@ -144,6 +144,12 @@ public sealed class ShellyWeatherHistoryEntry
     [JsonPropertyName("max_temperature")]
     public double? MaximumTemperatureCelsius { get; init; }
 
+    [JsonPropertyName("avg_temperature")]
+    public double? AverageTemperatureCelsius { get; init; }
+
+    [JsonPropertyName("temperature")]
+    public double? TemperatureCelsius { get; init; }
+
     [JsonPropertyName("humidity")]
     public double? RelativeHumidity { get; init; }
 
@@ -154,6 +160,18 @@ public sealed class ShellyWeatherHistoryEntry
     {
         get
         {
+            if (AverageTemperatureCelsius is double average &&
+                double.IsFinite(average))
+            {
+                return average;
+            }
+
+            if (TemperatureCelsius is double temperature &&
+                double.IsFinite(temperature))
+            {
+                return temperature;
+            }
+
             if (MinimumTemperatureCelsius is double minimum &&
                 MaximumTemperatureCelsius is double maximum &&
                 double.IsFinite(minimum) &&

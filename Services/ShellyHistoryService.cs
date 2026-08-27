@@ -158,13 +158,8 @@ public sealed class ShellyHistoryService
             json);
 
         var statistics =
-            JsonSerializer.Deserialize<
-                ShellyWeatherStatisticsResponse>(
-                json,
-                _jsonOptions)
-            ?? throw new JsonException(
-                "Shelly Cloud returnerte eit tomt eller " +
-                "ugyldig svar for temperaturhistorikk.");
+            DeserializeStatistics(
+                json);
 
         var measurements =
             (statistics.History ?? [])
@@ -332,6 +327,100 @@ public sealed class ShellyHistoryService
         throw new HttpRequestException(
             "Shelly Cloud avviste førespurnaden om " +
             "temperaturhistorikk.");
+    }
+
+    private ShellyWeatherStatisticsResponse DeserializeStatistics(
+        string json)
+    {
+        using var document =
+            JsonDocument.Parse(
+                json);
+
+        var root =
+            document.RootElement;
+
+        if (root.ValueKind is not JsonValueKind.Object)
+        {
+            throw new JsonException(
+                "Shelly Cloud returnerte eit ugyldig " +
+                "svar for temperaturhistorikk.");
+        }
+
+        /*
+         * Shelly Cloud har minst to responsvariantar i bruk:
+         * statistikkobjektet direkte på toppnivå, eller pakka inn
+         * som { isok: true, data: { ... } }.
+         */
+        var payload =
+            TryGetPropertyIgnoreCase(
+                root,
+                "data",
+                out var dataElement) &&
+            dataElement.ValueKind is JsonValueKind.Object
+                ? dataElement
+                : root;
+
+        var statistics =
+            payload.Deserialize<
+                ShellyWeatherStatisticsResponse>(
+                _jsonOptions)
+            ?? throw new JsonException(
+                "Shelly Cloud returnerte eit tomt eller " +
+                "ugyldig svar for temperaturhistorikk.");
+
+        if (statistics.History is null ||
+            statistics.History.Count == 0)
+        {
+            _logger.LogWarning(
+                "Shelly-statistikksvaret inneheld ingen " +
+                "historikkpunkt. Rotfelt: {RootFields}. " +
+                "Datafelt: {PayloadFields}.",
+                GetPropertyNames(root),
+                GetPropertyNames(payload));
+        }
+
+        return statistics;
+    }
+
+    private static bool TryGetPropertyIgnoreCase(
+        JsonElement element,
+        string propertyName,
+        out JsonElement value)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (string.Equals(
+                    property.Name,
+                    propertyName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                value =
+                    property.Value;
+
+                return true;
+            }
+        }
+
+        value =
+            default;
+
+        return false;
+    }
+
+    private static string GetPropertyNames(
+        JsonElement element)
+    {
+        if (element.ValueKind is not JsonValueKind.Object)
+        {
+            return "<ikkje objekt>";
+        }
+
+        return string.Join(
+            ", ",
+            element
+                .EnumerateObject()
+                .Select(property =>
+                    property.Name));
     }
 
     private void ValidateConfiguration()
