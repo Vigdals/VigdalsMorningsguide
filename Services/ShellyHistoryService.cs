@@ -11,6 +11,10 @@ public sealed class ShellyHistoryService
     private const int DefaultMeasurementIntervalMinutes =
         60;
 
+    private static readonly TimeZoneInfo NorwegianTimeZone =
+        TimeZoneInfo.FindSystemTimeZoneById(
+            "Europe/Oslo");
+
     private readonly HttpClient _httpClient;
     private readonly ShellyOptions _options;
     private readonly DegreeDayCalculationService
@@ -164,13 +168,17 @@ public sealed class ShellyHistoryService
         var measurements =
             (statistics.History ?? [])
                 .Where(entry =>
+                    entry.IsAvailable is not false &&
                     entry.IsMissing is not true &&
-                    entry.Timestamp > DateTimeOffset.UnixEpoch &&
                     entry.MeanTemperatureCelsius.HasValue)
                 .Select(entry =>
-                    new TemperatureMeasurementModel(
-                        entry.Timestamp.ToUniversalTime(),
-                        entry.MeanTemperatureCelsius!.Value))
+                    TryCreateMeasurement(
+                        entry,
+                        statistics.TimeZone))
+                .Where(measurement =>
+                    measurement is not null)
+                .Select(measurement =>
+                    measurement!)
                 .GroupBy(measurement =>
                     measurement.UtcTimestamp)
                 .Select(group =>
@@ -188,6 +196,7 @@ public sealed class ShellyHistoryService
 
         var measurementIntervalMinutes =
             ResolveMeasurementIntervalMinutes(
+                statistics.HistoryInterval ??
                 statistics.Interval,
                 measurements);
 
@@ -246,13 +255,125 @@ public sealed class ShellyHistoryService
          * feil døgngradeutrekning.
          */
         return
-            "v2/statistics/weather-station" +
+            "statistics/sensor/values" +
             $"?id={Encode(_options.DeviceId)}" +
             "&channel=0" +
             "&date_range=custom" +
-            $"&date_from={Encode(FormatUtc(dateFromUtc))}" +
-            $"&date_to={Encode(FormatUtc(dateToUtc))}" +
+            $"&date_from={Encode(FormatShellyLocal(dateFromUtc))}" +
+            $"&date_to={Encode(FormatShellyLocal(dateToUtc))}" +
             $"&auth_key={Encode(_options.AuthKey)}";
+    }
+
+    private static TemperatureMeasurementModel? TryCreateMeasurement(
+        ShellyWeatherHistoryEntry entry,
+        string? responseTimeZone)
+    {
+        if (!TryParseShellyTimestamp(
+                entry.Timestamp,
+                responseTimeZone,
+                out var timestampUtc) ||
+            timestampUtc <= DateTimeOffset.UnixEpoch ||
+            entry.MeanTemperatureCelsius is not double temperature)
+        {
+            return null;
+        }
+
+        return new TemperatureMeasurementModel(
+            timestampUtc,
+            temperature);
+    }
+
+    private static bool TryParseShellyTimestamp(
+        string value,
+        string? responseTimeZone,
+        out DateTimeOffset timestampUtc)
+    {
+        timestampUtc =
+            default;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        if (DateTimeOffset.TryParseExact(
+                value,
+                [
+                    "yyyy-MM-dd'T'HH:mm:ssK",
+                    "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK"
+                ],
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces,
+                out var timestampWithOffset))
+        {
+            timestampUtc =
+                timestampWithOffset.ToUniversalTime();
+
+            return true;
+        }
+
+        if (!DateTime.TryParseExact(
+                value,
+                [
+                    "yyyy-MM-dd HH:mm:ss",
+                    "yyyy-MM-dd'T'HH:mm:ss"
+                ],
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces,
+                out var localTimestamp))
+        {
+            return false;
+        }
+
+        localTimestamp =
+            DateTime.SpecifyKind(
+                localTimestamp,
+                DateTimeKind.Unspecified);
+
+        var timeZone =
+            ResolveTimeZone(
+                responseTimeZone);
+
+        if (timeZone.IsInvalidTime(
+                localTimestamp))
+        {
+            return false;
+        }
+
+        var offset =
+            timeZone.GetUtcOffset(
+                localTimestamp);
+
+        timestampUtc =
+            new DateTimeOffset(
+                localTimestamp,
+                offset)
+            .ToUniversalTime();
+
+        return true;
+    }
+
+    private static TimeZoneInfo ResolveTimeZone(
+        string? timeZoneId)
+    {
+        if (!string.IsNullOrWhiteSpace(timeZoneId))
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(
+                    timeZoneId);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                // Bruk norsk tid som trygg reserve for denne målaren.
+            }
+            catch (InvalidTimeZoneException)
+            {
+                // Bruk norsk tid som trygg reserve for denne målaren.
+            }
+        }
+
+        return NorwegianTimeZone;
     }
 
     private static int ResolveMeasurementIntervalMinutes(
@@ -453,13 +574,15 @@ public sealed class ShellyHistoryService
         }
     }
 
-    private static string FormatUtc(
+    private static string FormatShellyLocal(
         DateTimeOffset value)
     {
-        return value
-            .ToUniversalTime()
+        return TimeZoneInfo
+            .ConvertTime(
+                value,
+                NorwegianTimeZone)
             .ToString(
-                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                "yyyy-MM-dd HH:mm:ss",
                 CultureInfo.InvariantCulture);
     }
 

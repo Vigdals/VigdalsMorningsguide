@@ -129,6 +129,9 @@ public sealed class ShellyWeatherStatisticsResponse
     [JsonPropertyName("interval")]
     public string? Interval { get; init; }
 
+    [JsonPropertyName("history_interval")]
+    public string? HistoryInterval { get; init; }
+
     [JsonPropertyName("history")]
     public List<ShellyWeatherHistoryEntry>? History { get; init; }
 }
@@ -136,7 +139,11 @@ public sealed class ShellyWeatherStatisticsResponse
 public sealed class ShellyWeatherHistoryEntry
 {
     [JsonPropertyName("datetime")]
-    public DateTimeOffset Timestamp { get; init; }
+    public string Timestamp { get; init; } =
+        string.Empty;
+
+    [JsonPropertyName("available")]
+    public bool? IsAvailable { get; init; }
 
     [JsonPropertyName("min_temperature")]
     public double? MinimumTemperatureCelsius { get; init; }
