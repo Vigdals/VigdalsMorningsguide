@@ -1,0 +1,2973 @@
+diff --git a/.env.example b/.env.example
+index 578c38e..f446a51 100644
+--- a/.env.example
++++ b/.env.example
+@@ -1 +1,4 @@
+-FROST_CLIENT_ID=your-frost-client-id
+\ No newline at end of file
++FROST_CLIENT_ID=your-frost-client-id
++SHELLY_BASE_URL=https://shelly-your-region.shelly.cloud
++SHELLY_DEVICE_ID=your-shelly-device-id
++SHELLY_AUTH_KEY=your-shelly-cloud-auth-key
+diff --git a/Controllers/MorningController.cs b/Controllers/MorningController.cs
+index 5b55e78..98b57ee 100644
+--- a/Controllers/MorningController.cs
++++ b/Controllers/MorningController.cs
+@@ -1,5 +1,4 @@
+ using Microsoft.AspNetCore.Mvc;
+-using Microsoft.AspNetCore.Mvc.ModelBinding;
+ using Microsoft.AspNetCore.Mvc.Rendering;
+ using System.Text.Json;
+ using VigdalsMorningsguide.Models;
+@@ -17,6 +16,7 @@ public sealed class MorningController : Controller
+     private readonly MetForecastService _metForecastService;
+     private readonly MorningForecastService _morningForecastService;
+     private readonly ShellyService _shellyService;
++    private readonly ShellyHistoryService _shellyHistoryService;
+     private readonly ILogger<MorningController> _logger;
+ 
+     public MorningController(
+@@ -25,6 +25,7 @@ public sealed class MorningController : Controller
+         MetForecastService metForecastService,
+         MorningForecastService morningForecastService,
+         ShellyService shellyService,
++        ShellyHistoryService shellyHistoryService,
+         ILogger<MorningController> logger)
+     {
+         _frostService =
+@@ -42,6 +43,9 @@ public sealed class MorningController : Controller
+         _shellyService =
+             shellyService;
+ 
++        _shellyHistoryService =
++            shellyHistoryService;
++
+         _logger =
+             logger;
+     }
+@@ -87,7 +91,7 @@ public sealed class MorningController : Controller
+                     }
+             };
+ 
+-        PopulateStationOptions(
++        PopulateTemperatureSourceOptions(
+             model);
+ 
+         try
+@@ -112,7 +116,7 @@ public sealed class MorningController : Controller
+         MorningPageViewModel model,
+         CancellationToken cancellationToken)
+     {
+-        PopulateStationOptions(
++        PopulateTemperatureSourceOptions(
+             model);
+ 
+         try
+@@ -145,57 +149,69 @@ public sealed class MorningController : Controller
+                     model);
+             }
+ 
+-            var selectedStation =
+-                WeatherStationCatalog.Find(
+-                    model.Input.SelectedSourceId);
+-
+-            if (selectedStation is null)
+-            {
+-                ModelState.AddModelError(
+-                    "Input.SelectedSourceId",
+-                    "Den valde målestasjonen finst ikkje.");
+-
+-                return View(
+-                    model);
+-            }
+-
+             var hungAt =
+                 model.Input.GetHungAt();
+ 
+             var refrigeratedAt =
+                 model.Input.GetRefrigeratedAt();
+ 
+-            var station =
+-                await _stationService.ResolveStationAsync(
+-                    selectedStation,
+-                    hungAt,
+-                    cancellationToken);
++            WeatherStationModel? station =
++                null;
+ 
+-            if (station is null)
+-            {
+-                ModelState.AddModelError(
+-                    "Input.SelectedSourceId",
+-                    "Målestasjonen har ikkje gyldige " +
+-                    "temperaturmålingar for perioden.");
++            var usesShelly =
++                TemperatureSourceCatalog.IsShelly(
++                    model.Input.SelectedSourceId);
+ 
+-                return View(
+-                    model);
++            if (usesShelly)
++            {
++                model.Result =
++                    await _shellyHistoryService.CalculateAsync(
++                        hungAt,
++                        model.Input.TargetDegreeDays,
++                        refrigeratedAt,
++                        cancellationToken);
+             }
++            else
++            {
++                var selectedStation =
++                    WeatherStationCatalog.Find(
++                        model.Input.SelectedSourceId);
+ 
+-            /*
+-             * FrostService brukar målte temperaturar fram til
+-             * refrigeratedAt.
+-             *
+-             * Dersom refrigeratedAt er sett, blir temperaturen
+-             * rekna som fast 4 °C frå dette tidspunktet.
+-             */
+-            model.Result =
+-                await _frostService.CalculateAsync(
+-                    hungAt,
+-                    model.Input.TargetDegreeDays,
+-                    station,
+-                    refrigeratedAt,
+-                    cancellationToken);
++                if (selectedStation is null)
++                {
++                    ModelState.AddModelError(
++                        "Input.SelectedSourceId",
++                        "Den valde temperaturkjelda finst ikkje.");
++
++                    return View(
++                        model);
++                }
++
++                station =
++                    await _stationService.ResolveStationAsync(
++                        selectedStation,
++                        hungAt,
++                        cancellationToken);
++
++                if (station is null)
++                {
++                    ModelState.AddModelError(
++                        "Input.SelectedSourceId",
++                        "Målestasjonen har ikkje gyldige " +
++                        "temperaturmålingar for perioden.");
++
++                    return View(
++                        model);
++                }
++
++                model.Result =
++                    await _frostService.CalculateAsync(
++                        hungAt,
++                        model.Input.TargetDegreeDays,
++                        station,
++                        refrigeratedAt,
++                        cancellationToken);
++            }
+ 
+             if (!model.Result.TargetReached)
+             {
+@@ -216,11 +232,16 @@ public sealed class MorningController : Controller
+                                 model.Result,
+                                 refrigeratorTemperature);
+                 }
++                else if (usesShelly)
++                {
++                    PopulateShellyForecast(
++                        model);
++                }
+                 else
+                 {
+                     await PopulateForecastAsync(
+                         model,
+-                        station,
++                        station!,
+                         cancellationToken);
+                 }
+             }
+@@ -233,6 +254,31 @@ public sealed class MorningController : Controller
+         {
+             return new EmptyResult();
+         }
++        catch (OperationCanceledException exception)
++        {
++            if (TemperatureSourceCatalog.IsShelly(
++                    model.Input.SelectedSourceId))
++            {
++                _logger.LogError(
++                    "Tidsavbrot ved henting av " +
++                    "temperaturdata frå Shelly.");
++            }
++            else
++            {
++                _logger.LogError(
++                    exception,
++                    "Tidsavbrot ved henting av temperaturdata frå " +
++                    "{SelectedSourceId}.",
++                    model.Input.SelectedSourceId);
++            }
++
++            ModelState.AddModelError(
++                string.Empty,
++                "Temperaturkjelda brukte for lang tid på å svare.");
++
++            return View(
++                model);
++        }
+         catch (ArgumentException exception)
+         {
+             _logger.LogWarning(
+@@ -246,22 +292,65 @@ public sealed class MorningController : Controller
+             return View(
+                 model);
+         }
++        catch (ShellyHistoryUnavailableException exception)
++        {
++            _logger.LogWarning(
++                exception,
++                "Shelly manglar temperaturhistorikk for perioden.");
++
++            ModelState.AddModelError(
++                "Input.SelectedSourceId",
++                exception.Message);
++
++            return View(
++                model);
++        }
+         catch (HttpRequestException exception)
+         {
+-            /*
+-             * HttpRequestException frå MET og Shelly blir
+-             * handtert i dei respektive hjelpefunksjonane.
+-             *
+-             * Ei feil som kjem heilt hit er derfor normalt
+-             * frå Frost-kjeda.
+-             */
++            if (TemperatureSourceCatalog.IsShelly(
++                    model.Input.SelectedSourceId))
++            {
++                /*
++                 * Shelly brukar auth_key i URL-en. Me loggar
++                 * derfor ikkje HttpRequestException-objektet,
++                 * sidan enkelte transportfeil kan innehalde URI.
++                 */
++                _logger.LogError(
++                    "Klarte ikkje å hente temperaturdata frå " +
++                    "Shelly. HTTP-status: {StatusCode}.",
++                    exception.StatusCode is null
++                        ? "ukjend"
++                        : ((int)exception.StatusCode.Value).ToString());
++            }
++            else
++            {
++                _logger.LogError(
++                    exception,
++                    "Klarte ikkje å hente temperaturdata frå " +
++                    "{SelectedSourceId}.",
++                    model.Input.SelectedSourceId);
++            }
++
++            ModelState.AddModelError(
++                string.Empty,
++                "Klarte ikkje å hente temperaturdata frå " +
++                "den valde kjelda.");
++
++            return View(
++                model);
++        }
++        catch (JsonException exception)
++        {
+             _logger.LogError(
+                 exception,
+-                "Klarte ikkje å hente data frå Frost.");
++                "Klarte ikkje å tolke temperaturdata frå " +
++                "{SelectedSourceId}.",
++                model.Input.SelectedSourceId);
+ 
+             ModelState.AddModelError(
+                 string.Empty,
+-                "Klarte ikkje å hente temperaturdata frå Frost.");
++                "Temperaturkjelda returnerte data som ikkje " +
++                "kunne tolkast.");
+ 
+             return View(
+                 model);
+@@ -313,8 +402,11 @@ public sealed class MorningController : Controller
+              * brukaren i å bruke mørningskalkulatoren.
+              */
+             _logger.LogWarning(
+-                exception,
+-                "Klarte ikkje å hente måling frå Shelly Cloud.");
++                "Klarte ikkje å hente måling frå Shelly Cloud. " +
++                "HTTP-status: {StatusCode}.",
++                exception.StatusCode is null
++                    ? "ukjend"
++                    : ((int)exception.StatusCode.Value).ToString());
+ 
+             model.ShellyStatusMessage =
+                 "Klarte ikkje å hente siste måling frå " +
+@@ -330,7 +422,7 @@ public sealed class MorningController : Controller
+                 "Shelly returnerte ei måling som ikkje " +
+                 "kunne tolkast.";
+         }
+-        catch (OperationCanceledException exception)
++        catch (OperationCanceledException)
+             when (!cancellationToken.IsCancellationRequested)
+         {
+             /*
+@@ -338,7 +430,6 @@ public sealed class MorningController : Controller
+              * ikkje at brukaren avbraut HTTP-requesten.
+              */
+             _logger.LogWarning(
+-                exception,
+                 "Tidsavbrot ved kall mot Shelly Cloud.");
+ 
+             model.ShellyStatusMessage =
+@@ -392,6 +483,32 @@ public sealed class MorningController : Controller
+         }
+     }
+ 
++    private void PopulateShellyForecast(
++        MorningPageViewModel model)
++    {
++        if (model.Result is null ||
++            model.Result.TargetReached ||
++            model.ShellyMeasurement is not { IsStale: false } measurement ||
++            measurement.TemperatureCelsius is not double temperature ||
++            !double.IsFinite(temperature) ||
++            temperature <= 0)
++        {
++            return;
++        }
++
++        model.Forecast =
++            _morningForecastService
++                .CalculateAtConstantTemperature(
++                    model.Result,
++                    temperature);
++
++        if (model.Forecast is not null)
++        {
++            model.ShellyForecastTemperatureCelsius =
++                temperature;
++        }
++    }
++
+     private void ValidateRefrigerationInput(
+         MorningPageViewModel model)
+     {
+@@ -443,10 +560,22 @@ public sealed class MorningController : Controller
+                 "Kjøleskapsdatoen kan ikkje vere fram i tid.");
+         }
+     }
+-    private static void PopulateStationOptions(
++    private void PopulateTemperatureSourceOptions(
+         MorningPageViewModel model)
+     {
+-        model.StationOptions =
++        var localGroup =
++            new SelectListGroup
++            {
++                Name = "Lokal målar"
++            };
++
++        var frostGroup =
++            new SelectListGroup
++            {
++                Name = "Meteorologiske målestasjonar"
++            };
++
++        var stationOptions =
+             WeatherStationCatalog.Stations
+                 .Select(
+                     station =>
+@@ -456,9 +585,29 @@ public sealed class MorningController : Controller
+                                 station.SourceId,
+ 
+                             Text =
+-                                station.DisplayName
++                                station.DisplayName,
++
++                            Group =
++                                frostGroup
+                         })
+                 .ToList();
++
++        stationOptions.Insert(
++            0,
++            new SelectListItem
++            {
++                Value =
++                    TemperatureSourceCatalog.ShellySourceId,
++
++                Text =
++                    _shellyHistoryService.DisplayName,
++
++                Group =
++                    localGroup
++            });
++
++        model.TemperatureSourceOptions =
++            stationOptions;
+     }
+ 
+     [HttpGet] 
+@@ -466,4 +615,4 @@ public sealed class MorningController : Controller
+     {
+         return View();
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/Models/MorningInputModel.cs b/Models/MorningInputModel.cs
+index 55e7550..e6dc4fb 100644
+--- a/Models/MorningInputModel.cs
++++ b/Models/MorningInputModel.cs
+@@ -14,8 +14,8 @@ public sealed class MorningInputModel
+     public TimeOnly HungTime { get; set; } =
+         TimeOnly.FromDateTime(DateTime.Now);
+ 
+-    [Display(Name = "Målestasjon")]
+-    [Required(ErrorMessage = "Du må velje målestasjon.")]
++    [Display(Name = "Temperaturkjelde")]
++    [Required(ErrorMessage = "Du må velje temperaturkjelde.")]
+     public string SelectedSourceId { get; set; } =
+         WeatherStationCatalog.DefaultSourceId;
+ 
+@@ -57,4 +57,4 @@ public sealed class MorningInputModel
+                 RefrigeratedFromTime.Value),
+             DateTimeKind.Unspecified);
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/Models/MorningPageViewModel.cs b/Models/MorningPageViewModel.cs
+index b113863..c11e4be 100644
+--- a/Models/MorningPageViewModel.cs
++++ b/Models/MorningPageViewModel.cs
+@@ -1,3 +1,4 @@
++using Microsoft.AspNetCore.Mvc.ModelBinding;
+ using Microsoft.AspNetCore.Mvc.Rendering;
+ 
+ namespace VigdalsMorningsguide.Models;
+@@ -7,14 +8,22 @@ public sealed class MorningPageViewModel
+     public MorningInputModel Input { get; set; } =
+         new();
+ 
++    [BindNever]
+     public MorningResultModel? Result { get; set; }
+ 
++    [BindNever]
+     public MorningForecastModel? Forecast { get; set; }
+ 
++    [BindNever]
+     public ShellyMeasurementModel? ShellyMeasurement { get; set; }
+ 
++    [BindNever]
+     public string? ShellyStatusMessage { get; set; }
+ 
+-    public IReadOnlyList<SelectListItem> StationOptions { get; set; } =
++    [BindNever]
++    public double? ShellyForecastTemperatureCelsius { get; set; }
++
++    [BindNever]
++    public IReadOnlyList<SelectListItem> TemperatureSourceOptions { get; set; } =
+         [];
+-}
+\ No newline at end of file
++}
+diff --git a/Models/ShellyModels.cs b/Models/ShellyModels.cs
+index 94450ad..1361a6f 100644
+--- a/Models/ShellyModels.cs
++++ b/Models/ShellyModels.cs
+@@ -121,6 +121,64 @@ public sealed class ShellySystemStatusModel
+     public int? WakeupPeriodSeconds { get; init; }
+ }
+ 
++public sealed class ShellyWeatherStatisticsResponse
++{
++    [JsonPropertyName("timezone")]
++    public string? TimeZone { get; init; }
++
++    [JsonPropertyName("interval")]
++    public string? Interval { get; init; }
++
++    [JsonPropertyName("history")]
++    public List<ShellyWeatherHistoryEntry>? History { get; init; }
++}
++
++public sealed class ShellyWeatherHistoryEntry
++{
++    [JsonPropertyName("datetime")]
++    public DateTimeOffset Timestamp { get; init; }
++
++    [JsonPropertyName("min_temperature")]
++    public double? MinimumTemperatureCelsius { get; init; }
++
++    [JsonPropertyName("max_temperature")]
++    public double? MaximumTemperatureCelsius { get; init; }
++
++    [JsonPropertyName("humidity")]
++    public double? RelativeHumidity { get; init; }
++
++    [JsonPropertyName("missing")]
++    public bool? IsMissing { get; init; }
++
++    public double? MeanTemperatureCelsius
++    {
++        get
++        {
++            if (MinimumTemperatureCelsius is double minimum &&
++                MaximumTemperatureCelsius is double maximum &&
++                double.IsFinite(minimum) &&
++                double.IsFinite(maximum))
++            {
++                return (minimum + maximum) / 2.0;
++            }
++
++            if (MinimumTemperatureCelsius is double minimumOnly &&
++                double.IsFinite(minimumOnly))
++            {
++                return minimumOnly;
++            }
++
++            if (MaximumTemperatureCelsius is double maximumOnly &&
++                double.IsFinite(maximumOnly))
++            {
++                return maximumOnly;
++            }
++
++            return null;
++        }
++    }
++}
++
+ public sealed class ShellyMeasurementModel
+ {
+     public double? TemperatureCelsius { get; init; }
+@@ -160,4 +218,4 @@ public sealed class ShellyMeasurementModel
+         MeasurementAge is TimeSpan age &&
+         age > TimeSpan.FromMinutes(
+             StaleAfterMinutes);
+-}
+\ No newline at end of file
++}
+diff --git a/Models/TemperatureSeriesModels.cs b/Models/TemperatureSeriesModels.cs
+new file mode 100644
+index 0000000..ad320b8
+--- /dev/null
++++ b/Models/TemperatureSeriesModels.cs
+@@ -0,0 +1,36 @@
++namespace VigdalsMorningsguide.Models;
++
++public sealed record TemperatureMeasurementModel(
++    DateTimeOffset UtcTimestamp,
++    double Temperature,
++    int? QualityCode = null);
++
++public sealed class TemperatureSourceModel
++{
++    public required string SourceId { get; init; }
++
++    public required string Name { get; init; }
++
++    public double DistanceKilometres { get; init; }
++
++    public double Latitude { get; init; }
++
++    public double Longitude { get; init; }
++
++    public double? MetresAboveSeaLevel { get; init; }
++}
++
++public static class TemperatureSourceCatalog
++{
++    public const string ShellySourceId =
++        "SHELLY_LOCAL";
++
++    public static bool IsShelly(
++        string? sourceId)
++    {
++        return string.Equals(
++            sourceId,
++            ShellySourceId,
++            StringComparison.OrdinalIgnoreCase);
++    }
++}
+diff --git a/Options/ShellyOptions.cs b/Options/ShellyOptions.cs
+index dc5e983..cc650a7 100644
+--- a/Options/ShellyOptions.cs
++++ b/Options/ShellyOptions.cs
+@@ -14,9 +14,21 @@ public sealed class ShellyOptions
+     public string AuthKey { get; init; } =
+         string.Empty;
+ 
++    public string DisplayName { get; init; } =
++        "Shelly i skålen i Sogndal";
++
+     public int CacheSeconds { get; init; } =
+         30;
+ 
+     public int StaleAfterMinutes { get; init; } =
+         30;
+-}
+\ No newline at end of file
++
++    public double MinimumCoveragePercent { get; init; } =
++        70.0;
++
++    public int MaximumAcceptedGapMinutes { get; init; } =
++        180;
++
++    public int MaximumDaysBack { get; init; } =
++        90;
++}
+diff --git a/Program.cs b/Program.cs
+index af66658..1698f20 100644
+--- a/Program.cs
++++ b/Program.cs
+@@ -10,6 +10,7 @@ var builder =
+ 
+ builder.Services.AddControllersWithViews();
+ builder.Services.AddMemoryCache();
++builder.Services.AddSingleton<ShellyCloudRequestGate>();
+ var nynorskCulture =
+     new CultureInfo(
+         "nn-NO");
+@@ -89,6 +90,11 @@ builder.Services
+             !string.IsNullOrWhiteSpace(
+                 options.AuthKey),
+         "Shelly:AuthKey manglar.")
++    .Validate(
++        options =>
++            !string.IsNullOrWhiteSpace(
++                options.DisplayName),
++        "Shelly:DisplayName manglar.")
+     .Validate(
+         options =>
+             options.CacheSeconds
+@@ -99,6 +105,19 @@ builder.Services
+             options.StaleAfterMinutes
+             is >= 1 and <= 1440,
+         "Shelly:StaleAfterMinutes må vere mellom 1 og 1440.")
++    .Validate(
++        options =>
++            options.MinimumCoveragePercent
++            is >= 0 and <= 100,
++        "Shelly:MinimumCoveragePercent må vere mellom 0 og 100.")
++    .Validate(
++        options =>
++            options.MaximumAcceptedGapMinutes > 0,
++        "Shelly:MaximumAcceptedGapMinutes må vere større enn null.")
++    .Validate(
++        options =>
++            options.MaximumDaysBack > 0,
++        "Shelly:MaximumDaysBack må vere større enn null.")
+     .ValidateOnStart();
+ 
+ static void ConfigureFrostClient(
+@@ -177,6 +196,19 @@ static void ConfigureShellyClient(
+             "VigdalsMorningsguide/1.0");
+ }
+ 
++static void ConfigureShellyHistoryClient(
++    IServiceProvider serviceProvider,
++    HttpClient httpClient)
++{
++    ConfigureShellyClient(
++        serviceProvider,
++        httpClient);
++
++    httpClient.Timeout =
++        TimeSpan.FromSeconds(
++            30);
++}
++
+ builder.Services.AddHttpClient<FrostService>(
+     ConfigureFrostClient);
+ builder.Services.AddHttpClient<FrostStationService>(
+@@ -185,8 +217,11 @@ builder.Services.AddHttpClient<MetForecastService>(
+     ConfigureMetForecastClient);
+ builder.Services.AddHttpClient<ShellyService>(
+     ConfigureShellyClient);
++builder.Services.AddHttpClient<ShellyHistoryService>(
++    ConfigureShellyHistoryClient);
+ 
+ builder.Services.AddSingleton<MorningForecastService>();
++builder.Services.AddSingleton<DegreeDayCalculationService>();
+ 
+ var app =
+     builder.Build();
+@@ -231,4 +266,4 @@ app.MapGet(
+             service = "VigdalsMorningsguide"
+         }));
+ 
+-app.Run();
+\ No newline at end of file
++app.Run();
+diff --git a/README.md b/README.md
+index affc3a0..d03f499 100644
+--- a/README.md
++++ b/README.md
+@@ -15,6 +15,7 @@ Pi](https://img.shields.io/badge/Raspberry_Pi-Hosted-C51A4A)
+ 
+ - 🦌 Reknar ut døgngrader for optimal mørning
+ - Hentar historiske temperaturar frå Frost API
++- Brukar historiske temperaturar frå Shelly som valbar lokal målar
+ - 🐳 Docker-basert drift
+ - HTTPS med Let's Encrypt
+ - Automatisk deploy frå GitHub
+@@ -88,9 +89,15 @@ docker compose up --build
+ Eller:
+ 
+ ```bash
++dotnet user-secrets set "Frost:ClientId" "<client-id>"
++dotnet user-secrets set "Shelly:BaseUrl" "https://shelly-xx-eu.shelly.cloud"
++dotnet user-secrets set "Shelly:DeviceId" "<device-id>"
++dotnet user-secrets set "Shelly:AuthKey" "<auth-key>"
+ dotnet run
+ ```
+ 
++Ikkje legg Shelly-nøkkelen i `appsettings.json` eller i Git.
++
+ ---
+ 
+ # Produksjon
+@@ -158,7 +165,8 @@ VigdalsMorningsguide/
+ 
+ # Planlagde funksjonar
+ 
+-- [x] Lokal temperatur og luftfuktigheit frå Shelly eller ESP32 (delvis implementert)
++- [x] Lokal temperatur og luftfuktigheit frå Shelly
++- [x] Shelly som temperaturkjelde i mørningskalkulatoren
+ - [x] Valg om kjøleskapsmørning
+ - [ ] Infoside om mørningsguide med anbefalingar
+ - [ ] Varsling når kjøtet er ferdigmørna via e-post
+diff --git a/Services/DegreeDayCalculationService.cs b/Services/DegreeDayCalculationService.cs
+new file mode 100644
+index 0000000..96bf6e7
+--- /dev/null
++++ b/Services/DegreeDayCalculationService.cs
+@@ -0,0 +1,873 @@
++using VigdalsMorningsguide.Models;
++
++namespace VigdalsMorningsguide.Services;
++
++public sealed class DegreeDayCalculationService
++{
++    private const double RefrigeratorTemperatureCelsius =
++        4.0;
++
++    private static readonly TimeZoneInfo NorwegianTimeZone =
++        TimeZoneInfo.FindSystemTimeZoneById(
++            "Europe/Oslo");
++
++    public MorningResultModel Calculate(
++        DateTime hungAt,
++        double targetDegreeDays,
++        TemperatureSourceModel source,
++        DateTime? refrigeratedAt,
++        IReadOnlyList<TemperatureMeasurementModel> measurements,
++        int measurementIntervalMinutes,
++        int maximumAcceptedGapMinutes,
++        double minimumCoveragePercent,
++        int maximumDaysBack,
++        DateTimeOffset? calculatedAtUtc = null)
++    {
++        ArgumentNullException.ThrowIfNull(
++            source);
++
++        ArgumentNullException.ThrowIfNull(
++            measurements);
++
++        ValidateSettings(
++            measurementIntervalMinutes,
++            maximumAcceptedGapMinutes,
++            minimumCoveragePercent,
++            maximumDaysBack);
++
++        ValidateSource(
++            source);
++
++        var nowUtc =
++            (calculatedAtUtc ?? DateTimeOffset.UtcNow)
++                .ToUniversalTime();
++
++        ValidateRequest(
++            hungAt,
++            targetDegreeDays,
++            refrigeratedAt,
++            maximumDaysBack,
++            nowUtc);
++
++        var hungAtLocal =
++            DateTime.SpecifyKind(
++                hungAt,
++                DateTimeKind.Unspecified);
++
++        var nowLocalOffset =
++            TimeZoneInfo.ConvertTime(
++                nowUtc,
++                NorwegianTimeZone);
++
++        var nowLocal =
++            DateTime.SpecifyKind(
++                nowLocalOffset.DateTime,
++                DateTimeKind.Unspecified);
++
++        DateTime? refrigeratedAtLocal =
++            null;
++
++        if (refrigeratedAt.HasValue)
++        {
++            refrigeratedAtLocal =
++                DateTime.SpecifyKind(
++                    refrigeratedAt.Value,
++                    DateTimeKind.Unspecified);
++
++        }
++
++        var hungAtUtc =
++            ConvertLocalToUtc(
++                hungAtLocal);
++
++        var orderedMeasurements =
++            measurements
++                .Where(measurement =>
++                    double.IsFinite(
++                        measurement.Temperature))
++                .GroupBy(measurement =>
++                    measurement.UtcTimestamp
++                        .ToUniversalTime())
++                .Select(group =>
++                    group.First() with
++                    {
++                        UtcTimestamp =
++                            group.Key
++                    })
++                .OrderBy(measurement =>
++                    measurement.UtcTimestamp)
++                .ToList();
++
++        return BuildResult(
++            orderedMeasurements,
++            hungAtLocal,
++            nowLocal,
++            hungAtUtc,
++            nowUtc,
++            targetDegreeDays,
++            source,
++            refrigeratedAtLocal,
++            measurementIntervalMinutes,
++            maximumAcceptedGapMinutes,
++            minimumCoveragePercent);
++    }
++
++    private static MorningResultModel BuildResult(
++        IReadOnlyList<TemperatureMeasurementModel> measurements,
++        DateTime hungAtLocal,
++        DateTime calculatedAtLocal,
++        DateTimeOffset periodStartUtc,
++        DateTimeOffset periodEndUtc,
++        double targetDegreeDays,
++        TemperatureSourceModel source,
++        DateTime? refrigeratedAtLocal,
++        int measurementIntervalMinutes,
++        int maximumAcceptedGapMinutes,
++        double minimumCoveragePercent)
++    {
++        var dailyResults =
++            new List<MorningDayModel>();
++
++        var accumulatedDegreeDays =
++            0.0;
++
++        var includedWeightedTemperatureHours =
++            0.0;
++
++        var includedCoveredHours =
++            0.0;
++
++        var totalCoveredHours =
++            0.0;
++
++        var firstDate =
++            DateOnly.FromDateTime(
++                hungAtLocal);
++
++        var lastDate =
++            DateOnly.FromDateTime(
++                calculatedAtLocal);
++
++        for (
++            var date = firstDate;
++            date <= lastDate;
++            date = date.AddDays(1))
++        {
++            var dayStartLocal =
++                DateTime.SpecifyKind(
++                    date.ToDateTime(
++                        TimeOnly.MinValue),
++                    DateTimeKind.Unspecified);
++
++            var nextDayStartLocal =
++                DateTime.SpecifyKind(
++                    date
++                        .AddDays(1)
++                        .ToDateTime(
++                            TimeOnly.MinValue),
++                    DateTimeKind.Unspecified);
++
++            var segmentStartLocal =
++                hungAtLocal > dayStartLocal
++                    ? hungAtLocal
++                    : dayStartLocal;
++
++            var segmentEndLocal =
++                calculatedAtLocal < nextDayStartLocal
++                    ? calculatedAtLocal
++                    : nextDayStartLocal;
++
++            if (segmentEndLocal <= segmentStartLocal)
++            {
++                continue;
++            }
++
++            var segmentStartUtc =
++                ConvertLocalToUtc(
++                    segmentStartLocal);
++
++            var segmentEndUtc =
++                ConvertLocalToUtc(
++                    segmentEndLocal);
++
++            var segmentDurationHours =
++                (segmentEndUtc - segmentStartUtc)
++                .TotalHours;
++
++            var outdoorStartLocal =
++                segmentStartLocal;
++
++            var outdoorEndLocal =
++                segmentEndLocal;
++
++            if (refrigeratedAtLocal.HasValue &&
++                refrigeratedAtLocal.Value < outdoorEndLocal)
++            {
++                outdoorEndLocal =
++                    refrigeratedAtLocal.Value;
++            }
++
++            if (outdoorEndLocal < outdoorStartLocal)
++            {
++                outdoorEndLocal =
++                    outdoorStartLocal;
++            }
++
++            DateTime? refrigeratorStartLocal =
++                null;
++
++            if (refrigeratedAtLocal.HasValue &&
++                refrigeratedAtLocal.Value < segmentEndLocal)
++            {
++                refrigeratorStartLocal =
++                    refrigeratedAtLocal.Value > segmentStartLocal
++                        ? refrigeratedAtLocal.Value
++                        : segmentStartLocal;
++            }
++
++            var outdoorDegreeDays =
++                0.0;
++
++            var outdoorWeightedTemperatureHours =
++                0.0;
++
++            var outdoorCoveredHours =
++                0.0;
++
++            var outdoorDurationHours =
++                0.0;
++
++            var outdoorIncluded =
++                true;
++
++            var observationCount =
++                0;
++
++            var expectedObservationCount =
++                0;
++
++            var qualityCodes =
++                new List<int>();
++
++            if (outdoorEndLocal > outdoorStartLocal)
++            {
++                var outdoorStartUtc =
++                    ConvertLocalToUtc(
++                        outdoorStartLocal);
++
++                var outdoorEndUtc =
++                    ConvertLocalToUtc(
++                        outdoorEndLocal);
++
++                outdoorDurationHours =
++                    (outdoorEndUtc - outdoorStartUtc)
++                    .TotalHours;
++
++                var integration =
++                    IntegrateMeasurements(
++                        measurements,
++                        outdoorStartUtc,
++                        outdoorEndUtc,
++                        measurementIntervalMinutes,
++                        maximumAcceptedGapMinutes);
++
++                var outdoorCoveragePercent =
++                    outdoorDurationHours <= 0
++                        ? 0
++                        : Math.Min(
++                            100,
++                            integration.CoveredHours /
++                            outdoorDurationHours *
++                            100);
++
++                outdoorIncluded =
++                    integration.CoveredHours > 0 &&
++                    outdoorCoveragePercent >=
++                    minimumCoveragePercent;
++
++                totalCoveredHours +=
++                    integration.CoveredHours;
++
++                if (outdoorIncluded)
++                {
++                    outdoorDegreeDays =
++                        integration.DegreeDays;
++
++                    outdoorWeightedTemperatureHours =
++                        integration.WeightedTemperatureHours;
++
++                    outdoorCoveredHours =
++                        integration.CoveredHours;
++
++                    includedWeightedTemperatureHours +=
++                        integration.WeightedTemperatureHours;
++
++                    includedCoveredHours +=
++                        integration.CoveredHours;
++                }
++
++                observationCount =
++                    measurements.Count(measurement =>
++                        measurement.UtcTimestamp >= outdoorStartUtc &&
++                        measurement.UtcTimestamp < outdoorEndUtc);
++
++                expectedObservationCount =
++                    CalculateExpectedObservationCount(
++                        outdoorStartUtc,
++                        outdoorEndUtc,
++                        measurementIntervalMinutes);
++
++                qualityCodes =
++                    measurements
++                        .Where(measurement =>
++                            measurement.UtcTimestamp >= outdoorStartUtc &&
++                            measurement.UtcTimestamp < outdoorEndUtc &&
++                            measurement.QualityCode.HasValue)
++                        .Select(measurement =>
++                            measurement.QualityCode!.Value)
++                        .Distinct()
++                        .OrderBy(code =>
++                            code)
++                        .ToList();
++            }
++
++            var refrigeratorDegreeDays =
++                0.0;
++
++            var refrigeratorWeightedTemperatureHours =
++                0.0;
++
++            var refrigeratorHours =
++                0.0;
++
++            if (refrigeratorStartLocal.HasValue)
++            {
++                var refrigeratorStartUtc =
++                    ConvertLocalToUtc(
++                        refrigeratorStartLocal.Value);
++
++                refrigeratorHours =
++                    (segmentEndUtc - refrigeratorStartUtc)
++                    .TotalHours;
++
++                if (refrigeratorHours > 0)
++                {
++                    refrigeratorDegreeDays =
++                        RefrigeratorTemperatureCelsius *
++                        refrigeratorHours /
++                        24.0;
++
++                    refrigeratorWeightedTemperatureHours =
++                        RefrigeratorTemperatureCelsius *
++                        refrigeratorHours;
++
++                    totalCoveredHours +=
++                        refrigeratorHours;
++
++                    includedWeightedTemperatureHours +=
++                        refrigeratorWeightedTemperatureHours;
++
++                    includedCoveredHours +=
++                        refrigeratorHours;
++                }
++            }
++
++            var degreeDays =
++                outdoorDegreeDays +
++                refrigeratorDegreeDays;
++
++            accumulatedDegreeDays +=
++                degreeDays;
++
++            var dayCoveredHours =
++                outdoorCoveredHours +
++                refrigeratorHours;
++
++            var dayWeightedTemperatureHours =
++                outdoorWeightedTemperatureHours +
++                refrigeratorWeightedTemperatureHours;
++
++            double? meanTemperature =
++                dayCoveredHours <= 0
++                    ? null
++                    : dayWeightedTemperatureHours /
++                      dayCoveredHours;
++
++            var coveragePercent =
++                segmentDurationHours <= 0
++                    ? 0
++                    : Math.Min(
++                        100,
++                        (
++                            outdoorCoveredHours +
++                            refrigeratorHours
++                        ) /
++                        segmentDurationHours *
++                        100);
++
++            var includedInTotal =
++                outdoorDurationHours <= 0 ||
++                outdoorIncluded;
++
++            dailyResults.Add(
++                new MorningDayModel
++                {
++                    Date =
++                        date,
++
++                    PeriodStart =
++                        segmentStartLocal,
++
++                    PeriodEnd =
++                        segmentEndLocal,
++
++                    MeanTemperature =
++                        meanTemperature,
++
++                    ObservationCount =
++                        observationCount,
++
++                    ExpectedObservationCount =
++                        expectedObservationCount,
++
++                    CoveragePercent =
++                        coveragePercent,
++
++                    IncludedInTotal =
++                        includedInTotal,
++
++                    UsesRefrigeratorTemperature =
++                        refrigeratorHours > 0,
++
++                    DegreeDays =
++                        degreeDays,
++
++                    AccumulatedDegreeDays =
++                        accumulatedDegreeDays,
++
++                    QualityCodes =
++                        qualityCodes
++                });
++        }
++
++        var totalPeriodHours =
++            (periodEndUtc - periodStartUtc)
++            .TotalHours;
++
++        var totalCoveragePercent =
++            totalPeriodHours <= 0
++                ? 0
++                : Math.Min(
++                    100,
++                    totalCoveredHours /
++                    totalPeriodHours *
++                    100);
++
++        double? averageTemperature =
++            includedCoveredHours <= 0
++                ? null
++                : includedWeightedTemperatureHours /
++                  includedCoveredHours;
++
++        var observationCountInPeriod =
++            measurements.Count(measurement =>
++                measurement.UtcTimestamp >= periodStartUtc &&
++                measurement.UtcTimestamp <= periodEndUtc);
++
++        return new MorningResultModel
++        {
++            HungAt =
++                hungAtLocal,
++
++            CalculatedAt =
++                calculatedAtLocal,
++
++            CalculatedAtUtc =
++                periodEndUtc,
++
++            RefrigeratedAt =
++                refrigeratedAtLocal,
++
++            RefrigeratorTemperatureCelsius =
++                refrigeratedAtLocal.HasValue
++                    ? RefrigeratorTemperatureCelsius
++                    : null,
++
++            SourceId =
++                source.SourceId,
++
++            SourceName =
++                source.Name,
++
++            StationDistanceKilometres =
++                source.DistanceKilometres,
++
++            StationLatitude =
++                source.Latitude,
++
++            StationLongitude =
++                source.Longitude,
++
++            StationMetresAboveSeaLevel =
++                source.MetresAboveSeaLevel,
++
++            TargetDegreeDays =
++                targetDegreeDays,
++
++            TotalDegreeDays =
++                accumulatedDegreeDays,
++
++            AverageTemperature =
++                averageTemperature,
++
++            ObservationCount =
++                observationCountInPeriod,
++
++            CoveragePercent =
++                totalCoveragePercent,
++
++            Days =
++                dailyResults
++        };
++    }
++
++    private static IntegrationResult IntegrateMeasurements(
++        IReadOnlyList<TemperatureMeasurementModel> measurements,
++        DateTimeOffset periodStart,
++        DateTimeOffset periodEnd,
++        int measurementIntervalMinutes,
++        int maximumAcceptedGapMinutes)
++    {
++        if (measurements.Count == 0 ||
++            periodEnd <= periodStart)
++        {
++            return IntegrationResult.Empty;
++        }
++
++        var totalDegreeDays =
++            0.0;
++
++        var weightedTemperatureHours =
++            0.0;
++
++        var coveredHours =
++            0.0;
++
++        for (
++            var index = 0;
++            index < measurements.Count;
++            index++)
++        {
++            var current =
++                measurements[index];
++
++            var nextTimestamp =
++                index + 1 < measurements.Count
++                    ? measurements[index + 1].UtcTimestamp
++                    : current.UtcTimestamp.AddMinutes(
++                        measurementIntervalMinutes);
++
++            var gapMinutes =
++                (nextTimestamp - current.UtcTimestamp)
++                .TotalMinutes;
++
++            if (gapMinutes <= 0 ||
++                gapMinutes > maximumAcceptedGapMinutes)
++            {
++                continue;
++            }
++
++            var intervalStart =
++                current.UtcTimestamp > periodStart
++                    ? current.UtcTimestamp
++                    : periodStart;
++
++            var intervalEnd =
++                nextTimestamp < periodEnd
++                    ? nextTimestamp
++                    : periodEnd;
++
++            if (intervalEnd <= intervalStart)
++            {
++                continue;
++            }
++
++            var intervalHours =
++                (intervalEnd - intervalStart)
++                .TotalHours;
++
++            weightedTemperatureHours +=
++                current.Temperature *
++                intervalHours;
++
++            totalDegreeDays +=
++                Math.Max(
++                    0,
++                    current.Temperature) *
++                intervalHours /
++                24.0;
++
++            coveredHours +=
++                intervalHours;
++        }
++
++        return new IntegrationResult(
++            totalDegreeDays,
++            weightedTemperatureHours,
++            coveredHours);
++    }
++
++    private static int CalculateExpectedObservationCount(
++        DateTimeOffset periodStart,
++        DateTimeOffset periodEnd,
++        int measurementIntervalMinutes)
++    {
++        var totalMinutes =
++            (periodEnd - periodStart)
++            .TotalMinutes;
++
++        if (totalMinutes <= 0)
++        {
++            return 0;
++        }
++
++        return (int)Math.Ceiling(
++            totalMinutes /
++            measurementIntervalMinutes);
++    }
++
++    private static void ValidateSettings(
++        int measurementIntervalMinutes,
++        int maximumAcceptedGapMinutes,
++        double minimumCoveragePercent,
++        int maximumDaysBack)
++    {
++        if (minimumCoveragePercent is < 0 or > 100)
++        {
++            throw new ArgumentOutOfRangeException(
++                nameof(minimumCoveragePercent),
++                "Minimum datadekning må vere mellom 0 og 100 prosent.");
++        }
++
++        if (measurementIntervalMinutes <= 0)
++        {
++            throw new ArgumentOutOfRangeException(
++                nameof(measurementIntervalMinutes),
++                "Måleintervallet må vere større enn null.");
++        }
++
++        if (maximumAcceptedGapMinutes <
++            measurementIntervalMinutes)
++        {
++            throw new ArgumentOutOfRangeException(
++                nameof(maximumAcceptedGapMinutes),
++                "Største godtekne målehol kan ikkje vere " +
++                "mindre enn måleintervallet.");
++        }
++
++        if (maximumDaysBack <= 0)
++        {
++            throw new ArgumentOutOfRangeException(
++                nameof(maximumDaysBack),
++                "Maksimal historikk må vere større enn null.");
++        }
++    }
++
++    public static void ValidateRequest(
++        DateTime hungAt,
++        double targetDegreeDays,
++        DateTime? refrigeratedAt,
++        int maximumDaysBack,
++        DateTimeOffset? calculatedAtUtc = null)
++    {
++        if (targetDegreeDays is < 1 or > 300)
++        {
++            throw new ArgumentOutOfRangeException(
++                nameof(targetDegreeDays),
++                "Målet må vere mellom 1 og 300 døgngrader.");
++        }
++
++        if (maximumDaysBack <= 0)
++        {
++            throw new ArgumentOutOfRangeException(
++                nameof(maximumDaysBack),
++                "Maksimal historikk må vere større enn null.");
++        }
++
++        var nowUtc =
++            (calculatedAtUtc ?? DateTimeOffset.UtcNow)
++                .ToUniversalTime();
++
++        var nowLocalOffset =
++            TimeZoneInfo.ConvertTime(
++                nowUtc,
++                NorwegianTimeZone);
++
++        var nowLocal =
++            DateTime.SpecifyKind(
++                nowLocalOffset.DateTime,
++                DateTimeKind.Unspecified);
++
++        var hungAtLocal =
++            DateTime.SpecifyKind(
++                hungAt,
++                DateTimeKind.Unspecified);
++
++        ValidateHungAt(
++            hungAtLocal,
++            nowLocal,
++            maximumDaysBack);
++
++        if (refrigeratedAt.HasValue)
++        {
++            var refrigeratedAtLocal =
++                DateTime.SpecifyKind(
++                    refrigeratedAt.Value,
++                    DateTimeKind.Unspecified);
++
++            ValidateRefrigeratedAt(
++                refrigeratedAtLocal,
++                hungAtLocal,
++                nowLocal);
++        }
++    }
++
++    private static void ValidateSource(
++        TemperatureSourceModel source)
++    {
++        if (string.IsNullOrWhiteSpace(
++                source.SourceId))
++        {
++            throw new ArgumentException(
++                "Temperaturkjelda manglar kjelde-ID.",
++                nameof(source));
++        }
++
++        if (string.IsNullOrWhiteSpace(
++                source.Name))
++        {
++            throw new ArgumentException(
++                "Temperaturkjelda manglar namn.",
++                nameof(source));
++        }
++    }
++
++    private static void ValidateRefrigeratedAt(
++        DateTime refrigeratedAtLocal,
++        DateTime hungAtLocal,
++        DateTime nowLocal)
++    {
++        if (refrigeratedAtLocal < hungAtLocal)
++        {
++            throw new ArgumentOutOfRangeException(
++                nameof(refrigeratedAtLocal),
++                "Kjøleskapstidspunktet kan ikkje vere før " +
++                "opphengstidspunktet.");
++        }
++
++        if (refrigeratedAtLocal > nowLocal)
++        {
++            throw new ArgumentOutOfRangeException(
++                nameof(refrigeratedAtLocal),
++                "Kjøleskapstidspunktet kan ikkje vere fram i tid.");
++        }
++
++        if (NorwegianTimeZone.IsInvalidTime(
++                refrigeratedAtLocal))
++        {
++            throw new ArgumentException(
++                "Kjøleskapstidspunktet finst ikkje på grunn av " +
++                "overgang til sommartid.",
++                nameof(refrigeratedAtLocal));
++        }
++
++        if (NorwegianTimeZone.IsAmbiguousTime(
++                refrigeratedAtLocal))
++        {
++            throw new ArgumentException(
++                "Kjøleskapstidspunktet er tvitydig på grunn av " +
++                "overgang frå sommartid.",
++                nameof(refrigeratedAtLocal));
++        }
++    }
++
++    private static void ValidateHungAt(
++        DateTime hungAtLocal,
++        DateTime nowLocal,
++        int maximumDaysBack)
++    {
++        if (hungAtLocal > nowLocal)
++        {
++            throw new ArgumentOutOfRangeException(
++                nameof(hungAtLocal),
++                "Opphengstidspunktet kan ikkje vere fram i tid.");
++        }
++
++        var earliestAllowed =
++            nowLocal.AddDays(
++                -maximumDaysBack);
++
++        if (hungAtLocal < earliestAllowed)
++        {
++            throw new ArgumentOutOfRangeException(
++                nameof(hungAtLocal),
++                $"Du kan maksimalt hente " +
++                $"{maximumDaysBack} døgn bakover.");
++        }
++
++        if (NorwegianTimeZone.IsInvalidTime(
++                hungAtLocal))
++        {
++            throw new ArgumentException(
++                "Tidspunktet finst ikkje på grunn av overgang " +
++                "til sommartid.",
++                nameof(hungAtLocal));
++        }
++
++        if (NorwegianTimeZone.IsAmbiguousTime(
++                hungAtLocal))
++        {
++            throw new ArgumentException(
++                "Tidspunktet er tvitydig på grunn av overgang " +
++                "frå sommartid. Vel eit anna klokkeslett.",
++                nameof(hungAtLocal));
++        }
++    }
++
++    public static DateTimeOffset ConvertNorwegianLocalToUtc(
++        DateTime localDateTime)
++    {
++        return ConvertLocalToUtc(
++            localDateTime);
++    }
++
++    private static DateTimeOffset ConvertLocalToUtc(
++        DateTime localDateTime)
++    {
++        var unspecified =
++            DateTime.SpecifyKind(
++                localDateTime,
++                DateTimeKind.Unspecified);
++
++        var utc =
++            TimeZoneInfo.ConvertTimeToUtc(
++                unspecified,
++                NorwegianTimeZone);
++
++        return new DateTimeOffset(
++            utc,
++            TimeSpan.Zero);
++    }
++
++    private sealed record IntegrationResult(
++        double DegreeDays,
++        double WeightedTemperatureHours,
++        double CoveredHours)
++    {
++        public static IntegrationResult Empty { get; } =
++            new(
++                DegreeDays: 0,
++                WeightedTemperatureHours: 0,
++                CoveredHours: 0);
++    }
++}
+diff --git a/Services/FrostService.cs b/Services/FrostService.cs
+index ffc7172..5d7482b 100644
+--- a/Services/FrostService.cs
++++ b/Services/FrostService.cs
+@@ -10,23 +10,26 @@ namespace VigdalsMorningsguide.Services;
+ 
+ public sealed class FrostService
+ {
+-    private const double RefrigeratorTemperatureCelsius = 4.0;
+-
+     private static readonly TimeZoneInfo NorwegianTimeZone =
+         TimeZoneInfo.FindSystemTimeZoneById("Europe/Oslo");
+ 
+     private readonly HttpClient _httpClient;
+     private readonly FrostOptions _options;
++    private readonly DegreeDayCalculationService
++        _degreeDayCalculationService;
+     private readonly ILogger<FrostService> _logger;
+     private readonly JsonSerializerOptions _jsonOptions;
+ 
+     public FrostService(
+         HttpClient httpClient,
+         IOptions<FrostOptions> options,
++        DegreeDayCalculationService degreeDayCalculationService,
+         ILogger<FrostService> logger)
+     {
+         _httpClient = httpClient;
+         _options = options.Value;
++        _degreeDayCalculationService =
++            degreeDayCalculationService;
+         _logger = logger;
+ 
+         _jsonOptions = new JsonSerializerOptions
+@@ -200,18 +203,39 @@ public sealed class FrostService
+                 frostResponse,
+                 station.ElementId);
+ 
+-        return BuildResult(
+-            measurements,
++        return _degreeDayCalculationService.Calculate(
+             hungAtLocal,
+-            nowLocal,
+-            hungAtUtc,
+-            nowUtc,
+             targetDegreeDays,
+-            station,
+-            refrigeratedAtLocal);
++            new TemperatureSourceModel
++            {
++                SourceId =
++                    station.SourceId,
++
++                Name =
++                    station.Name,
++
++                DistanceKilometres =
++                    station.DistanceKilometres,
++
++                Latitude =
++                    station.Latitude,
++
++                Longitude =
++                    station.Longitude,
++
++                MetresAboveSeaLevel =
++                    station.MetresAboveSeaLevel
++            },
++            refrigeratedAtLocal,
++            measurements,
++            _options.MeasurementIntervalMinutes,
++            _options.MaximumAcceptedGapMinutes,
++            _options.MinimumCoveragePercent,
++            _options.MaximumDaysBack,
++            nowUtc);
+     }
+ 
+-    private static List<TemperatureMeasurement> ExtractMeasurements(
++    private static List<TemperatureMeasurementModel> ExtractMeasurements(
+         FrostObservationResponse frostResponse,
+         string elementId)
+     {
+@@ -224,18 +248,10 @@ public sealed class FrostService
+                             elementId,
+                             StringComparison.Ordinal))
+                     .Select(observation =>
+-                    {
+-                        var localTimestamp =
+-                            TimeZoneInfo.ConvertTime(
+-                                dataPoint.ReferenceTime,
+-                                NorwegianTimeZone);
+-
+-                        return new TemperatureMeasurement(
++                        new TemperatureMeasurementModel(
+                             dataPoint.ReferenceTime.ToUniversalTime(),
+-                            localTimestamp,
+                             observation.Value,
+-                            observation.QualityCode);
+-                    }))
++                            observation.QualityCode)))
+             /*
+              * Frost kan i enkelte tilfelle returnere fleire
+              * observasjonar for same tidspunkt.
+@@ -249,561 +265,6 @@ public sealed class FrostService
+             .ToList();
+     }
+ 
+-    private MorningResultModel BuildResult(
+-        IReadOnlyList<TemperatureMeasurement> measurements,
+-        DateTime hungAtLocal,
+-        DateTime calculatedAtLocal,
+-        DateTimeOffset periodStartUtc,
+-        DateTimeOffset periodEndUtc,
+-        double targetDegreeDays,
+-        WeatherStationModel station,
+-        DateTime? refrigeratedAtLocal)
+-    {
+-        var dailyResults =
+-            new List<MorningDayModel>();
+-
+-        var accumulatedDegreeDays =
+-            0.0;
+-
+-        var includedWeightedTemperatureHours =
+-            0.0;
+-
+-        var includedCoveredHours =
+-            0.0;
+-
+-        var totalCoveredHours =
+-            0.0;
+-
+-        var firstDate =
+-            DateOnly.FromDateTime(
+-                hungAtLocal);
+-
+-        var lastDate =
+-            DateOnly.FromDateTime(
+-                calculatedAtLocal);
+-
+-        for (
+-            var date = firstDate;
+-            date <= lastDate;
+-            date = date.AddDays(1))
+-        {
+-            var dayStartLocal =
+-                DateTime.SpecifyKind(
+-                    date.ToDateTime(
+-                        TimeOnly.MinValue),
+-                    DateTimeKind.Unspecified);
+-
+-            var nextDayStartLocal =
+-                DateTime.SpecifyKind(
+-                    date
+-                        .AddDays(1)
+-                        .ToDateTime(
+-                            TimeOnly.MinValue),
+-                    DateTimeKind.Unspecified);
+-
+-            var segmentStartLocal =
+-                hungAtLocal > dayStartLocal
+-                    ? hungAtLocal
+-                    : dayStartLocal;
+-
+-            var segmentEndLocal =
+-                calculatedAtLocal < nextDayStartLocal
+-                    ? calculatedAtLocal
+-                    : nextDayStartLocal;
+-
+-            if (segmentEndLocal <= segmentStartLocal)
+-            {
+-                continue;
+-            }
+-
+-            var segmentStartUtc =
+-                ConvertLocalToUtc(
+-                    segmentStartLocal);
+-
+-            var segmentEndUtc =
+-                ConvertLocalToUtc(
+-                    segmentEndLocal);
+-
+-            var segmentDurationHours =
+-                (segmentEndUtc - segmentStartUtc)
+-                .TotalHours;
+-
+-            /*
+-             * Ein kalenderdag kan bestå av to periodar:
+-             *
+-             * 1. Utandørsperioden, rekna frå Frost.
+-             * 2. Kjøleskapsperioden, rekna med fast 4 °C.
+-             *
+-             * Dette er særleg viktig på sjølve dagen kjøtet
+-             * blir lagt i kjøleskap.
+-             */
+-            var outdoorStartLocal =
+-                segmentStartLocal;
+-
+-            var outdoorEndLocal =
+-                segmentEndLocal;
+-
+-            if (refrigeratedAtLocal.HasValue &&
+-                refrigeratedAtLocal.Value < outdoorEndLocal)
+-            {
+-                outdoorEndLocal =
+-                    refrigeratedAtLocal.Value;
+-            }
+-
+-            if (outdoorEndLocal < outdoorStartLocal)
+-            {
+-                outdoorEndLocal =
+-                    outdoorStartLocal;
+-            }
+-
+-            DateTime? refrigeratorStartLocal =
+-                null;
+-
+-            if (refrigeratedAtLocal.HasValue &&
+-                refrigeratedAtLocal.Value < segmentEndLocal)
+-            {
+-                refrigeratorStartLocal =
+-                    refrigeratedAtLocal.Value > segmentStartLocal
+-                        ? refrigeratedAtLocal.Value
+-                        : segmentStartLocal;
+-            }
+-
+-            /*
+-             * Først reknar me delen av dagen som var utandørs.
+-             */
+-            var outdoorDegreeDays =
+-                0.0;
+-
+-            var outdoorWeightedTemperatureHours =
+-                0.0;
+-
+-            var outdoorCoveredHours =
+-                0.0;
+-
+-            var outdoorDurationHours =
+-                0.0;
+-
+-            var outdoorIncluded =
+-                true;
+-
+-            var observationCount =
+-                0;
+-
+-            var expectedObservationCount =
+-                0;
+-
+-            var qualityCodes =
+-                new List<int>();
+-
+-            if (outdoorEndLocal > outdoorStartLocal)
+-            {
+-                var outdoorStartUtc =
+-                    ConvertLocalToUtc(
+-                        outdoorStartLocal);
+-
+-                var outdoorEndUtc =
+-                    ConvertLocalToUtc(
+-                        outdoorEndLocal);
+-
+-                outdoorDurationHours =
+-                    (outdoorEndUtc - outdoorStartUtc)
+-                    .TotalHours;
+-
+-                var integration =
+-                    IntegrateMeasurements(
+-                        measurements,
+-                        outdoorStartUtc,
+-                        outdoorEndUtc);
+-
+-                var outdoorCoveragePercent =
+-                    outdoorDurationHours <= 0
+-                        ? 0
+-                        : Math.Min(
+-                            100,
+-                            integration.CoveredHours /
+-                            outdoorDurationHours *
+-                            100);
+-
+-                outdoorIncluded =
+-                    integration.CoveredHours > 0 &&
+-                    outdoorCoveragePercent >=
+-                    _options.MinimumCoveragePercent;
+-
+-                totalCoveredHours +=
+-                    integration.CoveredHours;
+-
+-                if (outdoorIncluded)
+-                {
+-                    outdoorDegreeDays =
+-                        integration.DegreeDays;
+-
+-                    outdoorWeightedTemperatureHours =
+-                        integration.WeightedTemperatureHours;
+-
+-                    outdoorCoveredHours =
+-                        integration.CoveredHours;
+-
+-                    includedWeightedTemperatureHours +=
+-                        integration.WeightedTemperatureHours;
+-
+-                    includedCoveredHours +=
+-                        integration.CoveredHours;
+-                }
+-
+-                observationCount =
+-                    measurements.Count(measurement =>
+-                        measurement.UtcTimestamp >= outdoorStartUtc &&
+-                        measurement.UtcTimestamp < outdoorEndUtc);
+-
+-                expectedObservationCount =
+-                    CalculateExpectedObservationCount(
+-                        outdoorStartUtc,
+-                        outdoorEndUtc);
+-
+-                qualityCodes =
+-                    measurements
+-                        .Where(measurement =>
+-                            measurement.UtcTimestamp >= outdoorStartUtc &&
+-                            measurement.UtcTimestamp < outdoorEndUtc &&
+-                            measurement.QualityCode.HasValue)
+-                        .Select(measurement =>
+-                            measurement.QualityCode!.Value)
+-                        .Distinct()
+-                        .OrderBy(code =>
+-                            code)
+-                        .ToList();
+-            }
+-
+-            /*
+-             * Deretter reknar me eventuell kjøleskapsdel.
+-             */
+-            var refrigeratorDegreeDays =
+-                0.0;
+-
+-            var refrigeratorWeightedTemperatureHours =
+-                0.0;
+-
+-            var refrigeratorHours =
+-                0.0;
+-
+-            if (refrigeratorStartLocal.HasValue)
+-            {
+-                var refrigeratorStartUtc =
+-                    ConvertLocalToUtc(
+-                        refrigeratorStartLocal.Value);
+-
+-                refrigeratorHours =
+-                    (segmentEndUtc - refrigeratorStartUtc)
+-                    .TotalHours;
+-
+-                if (refrigeratorHours > 0)
+-                {
+-                    refrigeratorDegreeDays =
+-                        RefrigeratorTemperatureCelsius *
+-                        refrigeratorHours /
+-                        24.0;
+-
+-                    refrigeratorWeightedTemperatureHours =
+-                        RefrigeratorTemperatureCelsius *
+-                        refrigeratorHours;
+-
+-                    /*
+-                     * Kjøleskapstemperaturen er definert som kjend,
+-                     * så denne perioden har full dekning.
+-                     */
+-                    totalCoveredHours +=
+-                        refrigeratorHours;
+-
+-                    includedWeightedTemperatureHours +=
+-                        refrigeratorWeightedTemperatureHours;
+-
+-                    includedCoveredHours +=
+-                        refrigeratorHours;
+-                }
+-            }
+-
+-            /*
+-             * Summen for dagen består av begge periodane.
+-             */
+-            var degreeDays =
+-                outdoorDegreeDays +
+-                refrigeratorDegreeDays;
+-
+-            accumulatedDegreeDays +=
+-                degreeDays;
+-
+-            var dayCoveredHours =
+-                outdoorCoveredHours +
+-                refrigeratorHours;
+-
+-            var dayWeightedTemperatureHours =
+-                outdoorWeightedTemperatureHours +
+-                refrigeratorWeightedTemperatureHours;
+-
+-            double? meanTemperature =
+-                dayCoveredHours <= 0
+-                    ? null
+-                    : dayWeightedTemperatureHours /
+-                      dayCoveredHours;
+-
+-            var coveragePercent =
+-                segmentDurationHours <= 0
+-                    ? 0
+-                    : Math.Min(
+-                        100,
+-                        (
+-                            outdoorCoveredHours +
+-                            refrigeratorHours
+-                        ) /
+-                        segmentDurationHours *
+-                        100);
+-
+-            /*
+-             * Dersom dagen hadde ein utandørsperiode som mangla
+-             * tilstrekkelege Frost-data, markerer me dagen som
+-             * ufullstendig sjølv om kjøleskapsdelen er gyldig.
+-             *
+-             * Kjøleskapsdelen blir likevel rekna med.
+-             */
+-            var includedInTotal =
+-                outdoorDurationHours <= 0 ||
+-                outdoorIncluded;
+-
+-            dailyResults.Add(
+-                new MorningDayModel
+-                {
+-                    Date =
+-                        date,
+-
+-                    PeriodStart =
+-                        segmentStartLocal,
+-
+-                    PeriodEnd =
+-                        segmentEndLocal,
+-
+-                    MeanTemperature =
+-                        meanTemperature,
+-
+-                    ObservationCount =
+-                        observationCount,
+-
+-                    ExpectedObservationCount =
+-                        expectedObservationCount,
+-
+-                    CoveragePercent =
+-                        coveragePercent,
+-
+-                    IncludedInTotal =
+-                        includedInTotal,
+-
+-                    UsesRefrigeratorTemperature =
+-                        refrigeratorHours > 0,
+-
+-                    DegreeDays =
+-                        degreeDays,
+-
+-                    AccumulatedDegreeDays =
+-                        accumulatedDegreeDays,
+-
+-                    QualityCodes =
+-                        qualityCodes
+-                });
+-        }
+-
+-        var totalPeriodHours =
+-            (periodEndUtc - periodStartUtc)
+-            .TotalHours;
+-
+-        var totalCoveragePercent =
+-            totalPeriodHours <= 0
+-                ? 0
+-                : Math.Min(
+-                    100,
+-                    totalCoveredHours /
+-                    totalPeriodHours *
+-                    100);
+-
+-        double? averageTemperature =
+-            includedCoveredHours <= 0
+-                ? null
+-                : includedWeightedTemperatureHours /
+-                  includedCoveredHours;
+-
+-        var observationCountInPeriod =
+-            measurements.Count(measurement =>
+-                measurement.UtcTimestamp >= periodStartUtc &&
+-                measurement.UtcTimestamp <= periodEndUtc);
+-
+-        return new MorningResultModel
+-        {
+-            HungAt =
+-                hungAtLocal,
+-
+-            CalculatedAt =
+-                calculatedAtLocal,
+-
+-            CalculatedAtUtc =
+-                periodEndUtc,
+-
+-            RefrigeratedAt =
+-                refrigeratedAtLocal,
+-
+-            RefrigeratorTemperatureCelsius =
+-                refrigeratedAtLocal.HasValue
+-                    ? RefrigeratorTemperatureCelsius
+-                    : null,
+-
+-            SourceId =
+-                station.SourceId,
+-
+-            SourceName =
+-                station.Name,
+-
+-            StationDistanceKilometres =
+-                station.DistanceKilometres,
+-
+-            StationLatitude =
+-                station.Latitude,
+-
+-            StationLongitude =
+-                station.Longitude,
+-
+-            StationMetresAboveSeaLevel =
+-                station.MetresAboveSeaLevel,
+-
+-            TargetDegreeDays =
+-                targetDegreeDays,
+-
+-            TotalDegreeDays =
+-                accumulatedDegreeDays,
+-
+-            AverageTemperature =
+-                averageTemperature,
+-
+-            ObservationCount =
+-                observationCountInPeriod,
+-
+-            CoveragePercent =
+-                totalCoveragePercent,
+-
+-            Days =
+-                dailyResults
+-        };
+-    }
+-
+-    private IntegrationResult IntegrateMeasurements(
+-        IReadOnlyList<TemperatureMeasurement> measurements,
+-        DateTimeOffset periodStart,
+-        DateTimeOffset periodEnd)
+-    {
+-        if (measurements.Count == 0 ||
+-            periodEnd <= periodStart)
+-        {
+-            return IntegrationResult.Empty;
+-        }
+-
+-        var totalDegreeDays =
+-            0.0;
+-
+-        var weightedTemperatureHours =
+-            0.0;
+-
+-        var coveredHours =
+-            0.0;
+-
+-        for (
+-            var index = 0;
+-            index < measurements.Count;
+-            index++)
+-        {
+-            var current =
+-                measurements[index];
+-
+-            /*
+-             * Ei temperaturmåling blir rekna som gjeldande fram
+-             * til neste måling.
+-             *
+-             * For siste måling brukar me normalt måleintervallet.
+-             */
+-            var nextTimestamp =
+-                index + 1 < measurements.Count
+-                    ? measurements[index + 1].UtcTimestamp
+-                    : current.UtcTimestamp.AddMinutes(
+-                        _options.MeasurementIntervalMinutes);
+-
+-            var gapMinutes =
+-                (nextTimestamp - current.UtcTimestamp)
+-                .TotalMinutes;
+-
+-            /*
+-             * Eit stort hol i datasettet skal ikkje tolkast som
+-             * at same temperatur gjaldt gjennom heile holet.
+-             */
+-            if (gapMinutes <= 0 ||
+-                gapMinutes >
+-                _options.MaximumAcceptedGapMinutes)
+-            {
+-                continue;
+-            }
+-
+-            var intervalStart =
+-                current.UtcTimestamp > periodStart
+-                    ? current.UtcTimestamp
+-                    : periodStart;
+-
+-            var intervalEnd =
+-                nextTimestamp < periodEnd
+-                    ? nextTimestamp
+-                    : periodEnd;
+-
+-            if (intervalEnd <= intervalStart)
+-            {
+-                continue;
+-            }
+-
+-            var intervalHours =
+-                (intervalEnd - intervalStart)
+-                .TotalHours;
+-
+-            weightedTemperatureHours +=
+-                current.Temperature *
+-                intervalHours;
+-
+-            totalDegreeDays +=
+-                Math.Max(
+-                    0,
+-                    current.Temperature) *
+-                intervalHours /
+-                24.0;
+-
+-            coveredHours +=
+-                intervalHours;
+-        }
+-
+-        return new IntegrationResult(
+-            totalDegreeDays,
+-            weightedTemperatureHours,
+-            coveredHours);
+-    }
+-
+-    private int CalculateExpectedObservationCount(
+-        DateTimeOffset periodStart,
+-        DateTimeOffset periodEnd)
+-    {
+-        var totalMinutes =
+-            (periodEnd - periodStart)
+-            .TotalMinutes;
+-
+-        if (totalMinutes <= 0)
+-        {
+-            return 0;
+-        }
+-
+-        return (int)Math.Ceiling(
+-            totalMinutes /
+-            _options.MeasurementIntervalMinutes);
+-    }
+-
+     private static string BuildRequestUri(
+         string referenceTime,
+         WeatherStationModel station)
+@@ -1078,22 +539,4 @@ public sealed class FrostService
+         return Uri.EscapeDataString(
+             value);
+     }
+-
+-    private sealed record TemperatureMeasurement(
+-        DateTimeOffset UtcTimestamp,
+-        DateTimeOffset LocalTimestamp,
+-        double Temperature,
+-        int? QualityCode);
+-
+-    private sealed record IntegrationResult(
+-        double DegreeDays,
+-        double WeightedTemperatureHours,
+-        double CoveredHours)
+-    {
+-        public static IntegrationResult Empty { get; } =
+-            new(
+-                DegreeDays: 0,
+-                WeightedTemperatureHours: 0,
+-                CoveredHours: 0);
+-    }
+-}
+\ No newline at end of file
++}
+diff --git a/Services/ShellyCloudRequestGate.cs b/Services/ShellyCloudRequestGate.cs
+new file mode 100644
+index 0000000..1467ac9
+--- /dev/null
++++ b/Services/ShellyCloudRequestGate.cs
+@@ -0,0 +1,75 @@
++namespace VigdalsMorningsguide.Services;
++
++public sealed class ShellyCloudRequestGate
++{
++    private static readonly TimeSpan MinimumRequestSpacing =
++        TimeSpan.FromMilliseconds(1100);
++
++    private readonly SemaphoreSlim _semaphore =
++        new(
++            1,
++            1);
++
++    private DateTimeOffset _lastRequestStartedAt =
++        DateTimeOffset.MinValue;
++
++    public async ValueTask<IAsyncDisposable> EnterAsync(
++        CancellationToken cancellationToken)
++    {
++        await _semaphore.WaitAsync(
++            cancellationToken);
++
++        try
++        {
++            var earliestNextRequest =
++                _lastRequestStartedAt +
++                MinimumRequestSpacing;
++
++            var delay =
++                earliestNextRequest -
++                DateTimeOffset.UtcNow;
++
++            if (delay > TimeSpan.Zero)
++            {
++                await Task.Delay(
++                    delay,
++                    cancellationToken);
++            }
++
++            _lastRequestStartedAt =
++                DateTimeOffset.UtcNow;
++
++            return new Lease(
++                _semaphore);
++        }
++        catch
++        {
++            _semaphore.Release();
++            throw;
++        }
++    }
++
++    private sealed class Lease : IAsyncDisposable
++    {
++        private SemaphoreSlim? _semaphore;
++
++        public Lease(
++            SemaphoreSlim semaphore)
++        {
++            _semaphore =
++                semaphore;
++        }
++
++        public ValueTask DisposeAsync()
++        {
++            var semaphore =
++                Interlocked.Exchange(
++                    ref _semaphore,
++                    null);
++
++            semaphore?.Release();
++
++            return ValueTask.CompletedTask;
++        }
++    }
++}
+diff --git a/Services/ShellyHistoryService.cs b/Services/ShellyHistoryService.cs
+new file mode 100644
+index 0000000..b98811c
+--- /dev/null
++++ b/Services/ShellyHistoryService.cs
+@@ -0,0 +1,392 @@
++using System.Globalization;
++using System.Text.Json;
++using Microsoft.Extensions.Options;
++using VigdalsMorningsguide.Models;
++using VigdalsMorningsguide.Options;
++
++namespace VigdalsMorningsguide.Services;
++
++public sealed class ShellyHistoryService
++{
++    private const int DefaultMeasurementIntervalMinutes =
++        60;
++
++    private readonly HttpClient _httpClient;
++    private readonly ShellyOptions _options;
++    private readonly DegreeDayCalculationService
++        _degreeDayCalculationService;
++    private readonly ShellyCloudRequestGate _requestGate;
++    private readonly ILogger<ShellyHistoryService> _logger;
++    private readonly JsonSerializerOptions _jsonOptions;
++
++    public string DisplayName =>
++        _options.DisplayName;
++
++    public ShellyHistoryService(
++        HttpClient httpClient,
++        IOptions<ShellyOptions> options,
++        DegreeDayCalculationService degreeDayCalculationService,
++        ShellyCloudRequestGate requestGate,
++        ILogger<ShellyHistoryService> logger)
++    {
++        _httpClient =
++            httpClient;
++
++        _options =
++            options.Value;
++
++        _degreeDayCalculationService =
++            degreeDayCalculationService;
++
++        _requestGate =
++            requestGate;
++
++        _logger =
++            logger;
++
++        _jsonOptions =
++            new JsonSerializerOptions
++            {
++                PropertyNameCaseInsensitive = true
++            };
++    }
++
++    public async Task<MorningResultModel> CalculateAsync(
++        DateTime hungAt,
++        double targetDegreeDays,
++        DateTime? refrigeratedAt,
++        CancellationToken cancellationToken = default)
++    {
++        ValidateConfiguration();
++
++        var nowUtc =
++            DateTimeOffset.UtcNow;
++
++        DegreeDayCalculationService.ValidateRequest(
++            hungAt,
++            targetDegreeDays,
++            refrigeratedAt,
++            _options.MaximumDaysBack,
++            nowUtc);
++
++        var hungAtUtc =
++            DegreeDayCalculationService
++                .ConvertNorwegianLocalToUtc(
++                    hungAt);
++
++        DateTimeOffset? refrigeratedAtUtc =
++            refrigeratedAt.HasValue
++                ? DegreeDayCalculationService
++                    .ConvertNorwegianLocalToUtc(
++                        refrigeratedAt.Value)
++                : null;
++
++        var observationEndUtc =
++            refrigeratedAtUtc.HasValue &&
++            refrigeratedAtUtc.Value < nowUtc
++                ? refrigeratedAtUtc.Value
++                : nowUtc;
++
++        var queryFromUtc =
++            hungAtUtc.AddHours(-1);
++
++        var queryToUtc =
++            observationEndUtc;
++
++        /*
++         * Shelly kan avvise den uferdige bøtta for inneverande
++         * minutt. Eitt minutt tilbake gir ei avslutta sluttramme,
++         * medan kalkulatoren framleis reknar fram til faktisk no.
++         */
++        if (queryToUtc > nowUtc.AddMinutes(-1))
++        {
++            queryToUtc =
++                nowUtc.AddMinutes(-1);
++        }
++
++        if (queryToUtc <= queryFromUtc)
++        {
++            queryFromUtc =
++                queryToUtc.AddHours(-1);
++        }
++
++        var requestUri =
++            BuildRequestUri(
++                queryFromUtc,
++                queryToUtc);
++
++        _logger.LogInformation(
++            "Hentar Shelly-temperaturhistorikk. " +
++            "Frå {DateFrom} til {DateTo}.",
++            queryFromUtc,
++            queryToUtc);
++
++        using var request =
++            new HttpRequestMessage(
++                HttpMethod.Get,
++                requestUri);
++
++        await using var requestLease =
++            await _requestGate.EnterAsync(
++                cancellationToken);
++
++        using var response =
++            await _httpClient.SendAsync(
++                request,
++                HttpCompletionOption.ResponseHeadersRead,
++                cancellationToken);
++
++        var json =
++            await response.Content.ReadAsStringAsync(
++                cancellationToken);
++
++        if (!response.IsSuccessStatusCode)
++        {
++            _logger.LogWarning(
++                "Shelly Cloud returnerte HTTP {StatusCode} " +
++                "for temperaturhistorikk.",
++                (int)response.StatusCode);
++
++            throw new HttpRequestException(
++                "Shelly Cloud returnerte HTTP " +
++                $"{(int)response.StatusCode} for temperaturhistorikk.",
++                inner: null,
++                response.StatusCode);
++        }
++
++        ThrowIfApplicationError(
++            json);
++
++        var statistics =
++            JsonSerializer.Deserialize<
++                ShellyWeatherStatisticsResponse>(
++                json,
++                _jsonOptions)
++            ?? throw new JsonException(
++                "Shelly Cloud returnerte eit tomt eller " +
++                "ugyldig svar for temperaturhistorikk.");
++
++        var measurements =
++            (statistics.History ?? [])
++                .Where(entry =>
++                    entry.IsMissing is not true &&
++                    entry.Timestamp > DateTimeOffset.UnixEpoch &&
++                    entry.MeanTemperatureCelsius.HasValue)
++                .Select(entry =>
++                    new TemperatureMeasurementModel(
++                        entry.Timestamp.ToUniversalTime(),
++                        entry.MeanTemperatureCelsius!.Value))
++                .GroupBy(measurement =>
++                    measurement.UtcTimestamp)
++                .Select(group =>
++                    group.First())
++                .OrderBy(measurement =>
++                    measurement.UtcTimestamp)
++                .ToList();
++
++        if (measurements.Count == 0)
++        {
++            throw new ShellyHistoryUnavailableException(
++                "Shelly har ingen gyldige temperaturmålingar " +
++                "for den valde perioden.");
++        }
++
++        var measurementIntervalMinutes =
++            ResolveMeasurementIntervalMinutes(
++                statistics.Interval,
++                measurements);
++
++        var maximumAcceptedGapMinutes =
++            Math.Max(
++                _options.MaximumAcceptedGapMinutes,
++                measurementIntervalMinutes * 3);
++
++        _logger.LogInformation(
++            "Henta {MeasurementCount} Shelly-målingar med " +
++            "estimert intervall {IntervalMinutes} minutt.",
++            measurements.Count,
++            measurementIntervalMinutes);
++
++        return _degreeDayCalculationService.Calculate(
++            hungAt,
++            targetDegreeDays,
++            new TemperatureSourceModel
++            {
++                SourceId =
++                    TemperatureSourceCatalog.ShellySourceId,
++
++                Name =
++                    _options.DisplayName,
++
++                DistanceKilometres =
++                    0,
++
++                Latitude =
++                    0,
++
++                Longitude =
++                    0,
++
++                MetresAboveSeaLevel =
++                    null
++            },
++            refrigeratedAt,
++            measurements,
++            measurementIntervalMinutes,
++            maximumAcceptedGapMinutes,
++            _options.MinimumCoveragePercent,
++            _options.MaximumDaysBack,
++            nowUtc);
++    }
++
++    private string BuildRequestUri(
++        DateTimeOffset dateFromUtc,
++        DateTimeOffset dateToUtc)
++    {
++        /*
++         * Shelly dokumenterer ikkje statistikk-endepunktet som
++         * ein stabil del av Cloud Control API-et. Hald derfor
++         * kontrakten avgrensa til denne tenesta og valider svaret
++         * strengt, slik at endringar gir synleg feil i staden for
++         * feil døgngradeutrekning.
++         */
++        return
++            "v2/statistics/weather-station" +
++            $"?id={Encode(_options.DeviceId)}" +
++            "&channel=0" +
++            "&date_range=custom" +
++            $"&date_from={Encode(FormatUtc(dateFromUtc))}" +
++            $"&date_to={Encode(FormatUtc(dateToUtc))}" +
++            $"&auth_key={Encode(_options.AuthKey)}";
++    }
++
++    private static int ResolveMeasurementIntervalMinutes(
++        string? interval,
++        IReadOnlyList<TemperatureMeasurementModel> measurements)
++    {
++        var observedGaps =
++            measurements
++                .Zip(
++                    measurements.Skip(1),
++                    (current, next) =>
++                        (next.UtcTimestamp - current.UtcTimestamp)
++                        .TotalMinutes)
++                .Where(minutes =>
++                    double.IsFinite(minutes) &&
++                    minutes > 0 &&
++                    minutes <= 7 * 24 * 60)
++                .OrderBy(minutes =>
++                    minutes)
++                .ToList();
++
++        if (observedGaps.Count >= 2)
++        {
++            var middleIndex =
++                observedGaps.Count / 2;
++
++            var median =
++                observedGaps.Count % 2 == 0
++                    ? (
++                        observedGaps[middleIndex - 1] +
++                        observedGaps[middleIndex]
++                      ) / 2.0
++                    : observedGaps[middleIndex];
++
++            return Math.Max(
++                1,
++                (int)Math.Round(
++                    median,
++                    MidpointRounding.AwayFromZero));
++        }
++
++        return (interval ?? string.Empty)
++            .Trim()
++            .ToLowerInvariant() switch
++        {
++            "minute" => 1,
++            "hour" => 60,
++            "day" => 24 * 60,
++            _ => DefaultMeasurementIntervalMinutes
++        };
++    }
++
++    private static void ThrowIfApplicationError(
++        string json)
++    {
++        using var document =
++            JsonDocument.Parse(
++                json);
++
++        var root =
++            document.RootElement;
++
++        if (root.ValueKind is not JsonValueKind.Object ||
++            !root.TryGetProperty(
++                "isok",
++                out var isOkElement) ||
++            isOkElement.ValueKind is not JsonValueKind.False)
++        {
++            return;
++        }
++
++        throw new HttpRequestException(
++            "Shelly Cloud avviste førespurnaden om " +
++            "temperaturhistorikk.");
++    }
++
++    private void ValidateConfiguration()
++    {
++        if (string.IsNullOrWhiteSpace(
++                _options.AuthKey))
++        {
++            throw new InvalidOperationException(
++                "Shelly:AuthKey manglar.");
++        }
++
++        if (string.IsNullOrWhiteSpace(
++                _options.DeviceId))
++        {
++            throw new InvalidOperationException(
++                "Shelly:DeviceId manglar.");
++        }
++
++        if (string.IsNullOrWhiteSpace(
++                _options.DisplayName))
++        {
++            throw new InvalidOperationException(
++                "Shelly:DisplayName manglar.");
++        }
++
++        if (_httpClient.BaseAddress is null)
++        {
++            throw new InvalidOperationException(
++                "BaseAddress manglar på Shelly-klienten.");
++        }
++    }
++
++    private static string FormatUtc(
++        DateTimeOffset value)
++    {
++        return value
++            .ToUniversalTime()
++            .ToString(
++                "yyyy-MM-dd'T'HH:mm:ss'Z'",
++                CultureInfo.InvariantCulture);
++    }
++
++    private static string Encode(
++        string value)
++    {
++        return Uri.EscapeDataString(
++            value);
++    }
++}
++
++public sealed class ShellyHistoryUnavailableException : Exception
++{
++    public ShellyHistoryUnavailableException(
++        string message)
++        : base(message)
++    {
++    }
++}
+diff --git a/Services/ShellyService.cs b/Services/ShellyService.cs
+index 8578bd2..36a607b 100644
+--- a/Services/ShellyService.cs
++++ b/Services/ShellyService.cs
+@@ -22,13 +22,15 @@ public sealed class ShellyService
+     private readonly ShellyOptions _options;
+     private readonly ILogger<ShellyService> _logger;
+     private readonly IMemoryCache _memoryCache;
++    private readonly ShellyCloudRequestGate _requestGate;
+     private readonly JsonSerializerOptions _jsonOptions;
+ 
+     public ShellyService(
+         HttpClient httpClient,
+         IOptions<ShellyOptions> options,
+         ILogger<ShellyService> logger,
+-        IMemoryCache memoryCache)
++        IMemoryCache memoryCache,
++        ShellyCloudRequestGate requestGate)
+     {
+         _httpClient =
+             httpClient;
+@@ -42,6 +44,9 @@ public sealed class ShellyService
+         _memoryCache =
+             memoryCache;
+ 
++        _requestGate =
++            requestGate;
++
+         _jsonOptions =
+             new JsonSerializerOptions
+             {
+@@ -151,6 +156,10 @@ public sealed class ShellyService
+                         requestBody)
+             };
+ 
++        await using var requestLease =
++            await _requestGate.EnterAsync(
++                cancellationToken);
++
+         using var response =
+             await _httpClient.SendAsync(
+                 request,
+@@ -323,4 +332,4 @@ public sealed class ShellyService
+                 "BaseAddress manglar på Shelly-klienten.");
+         }
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/Views/Morning/Index.cshtml b/Views/Morning/Index.cshtml
+index e351ab6..69926cd 100644
+--- a/Views/Morning/Index.cshtml
++++ b/Views/Morning/Index.cshtml
+@@ -9,6 +9,10 @@
+             .ToString(
+                 "yyyy-MM-dd",
+                 CultureInfo.InvariantCulture);
++
++    var usesShelly =
++        TemperatureSourceCatalog.IsShelly(
++            Model.Input.SelectedSourceId);
+ }
+ 
+ <div class="container py-4 py-lg-5">
+@@ -36,7 +40,7 @@
+         <div class="guide-card-header">
+             <h2 id="input-heading"
+                 class="h4 mb-0">
+-                Registrer målestasjon, når du hengte opp viltet og ønska døgngrader
++                Registrer temperaturkjelde, når du hengte opp viltet og ønska døgngrader
+             </h2>
+             <div class="mt-3">
+                 <a asp-controller="Morning"
+@@ -66,7 +70,7 @@
+                         </label>
+ 
+                         <select asp-for="Input.SelectedSourceId"
+-                                asp-items="Model.StationOptions"
++                                asp-items="Model.TemperatureSourceOptions"
+                                 class="form-select form-select-lg"
+                                 aria-describedby="station-help">
+                         </select>
+@@ -77,8 +81,9 @@
+ 
+                         <div id="station-help"
+                              class="form-text">
+-                            Vel målestasjonen som best liknar temperaturen
+-                            der kjøtet heng.
++                            Vel Shelly dersom kjøtet heng ved den lokale
++                            målaren. Elles vel du målestasjonen som best
++                            liknar temperaturen der kjøtet heng.
+                         </div>
+                     </div>
+ 
+@@ -369,6 +374,17 @@
+                                 vidare i kjøleskapet. Om du har vakumpakka kjøt, hugs å snu kjøtet annakvar dag!
+                             </p>
+                         }
++                        else if (Model.ShellyForecastTemperatureCelsius
++                                 is double shellyForecastTemperature)
++                        {
++                            <p class="remaining-time-description mb-0">
++                                Basert på målte døgngrader fram til no og
++                                siste Shelly-måling på
++                                @shellyForecastTemperature.ToString("0.0") °C
++                                vidare. Temperaturen kan endre seg, så dette
++                                er eit estimat.
++                            </p>
++                        }
+                         else
+                         {
+                             <p class="remaining-time-description mb-0">
+@@ -598,15 +614,18 @@
+                     </dd>
+ 
+                     <dt class="col-sm-5 col-lg-4">
+-                        Målestasjon
++                        Temperaturkjelde
+                     </dt>
+ 
+                     <dd class="col-sm-7 col-lg-8">
+                         @result.SourceName
+ 
+-                        <span class="text-body-secondary">
+-                            (@result.SourceId)
+-                        </span>
++                        @if (!usesShelly)
++                        {
++                            <span class="text-body-secondary">
++                                (@result.SourceId)
++                            </span>
++                        }
+                     </dd>
+ 
+                     @if (result.StationMetresAboveSeaLevel.HasValue)
+@@ -1024,4 +1043,4 @@
+             updateRefrigeratorFields();
+         })();
+     </script>
+-}
+\ No newline at end of file
++}
+diff --git a/appsettings.json b/appsettings.json
+index 40a4d74..c304753 100644
+--- a/appsettings.json
++++ b/appsettings.json
+@@ -3,7 +3,7 @@
+     "LogLevel": {
+       "Default": "Information",
+       "Microsoft.AspNetCore": "Warning",
+-      "System.Net.Http.HttpClient": "Information"
++      "System.Net.Http.HttpClient": "Warning"
+     }
+   },
+ 
+@@ -22,8 +22,12 @@
+     "UserAgent": "VigdalsMorningsguide/1.0 (+https://github.com/Vigdals/VigdalsMorningsguide)"
+   },
+ 
+-  "Shelly": {
+-    "CacheSeconds": 30,
+-    "StaleAfterMinutes": 30
+-  }
+-}
+\ No newline at end of file
++  "Shelly": {
++    "DisplayName": "Shelly i skålen i Sogndal",
++    "CacheSeconds": 30,
++    "StaleAfterMinutes": 30,
++    "MinimumCoveragePercent": 70.0,
++    "MaximumAcceptedGapMinutes": 180,
++    "MaximumDaysBack": 90
++  }
++}

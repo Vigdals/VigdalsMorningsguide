@@ -14,8 +14,8 @@ public sealed class MorningInputModel
     public TimeOnly HungTime { get; set; } =
         TimeOnly.FromDateTime(DateTime.Now);
 
-    [Display(Name = "Målestasjon")]
-    [Required(ErrorMessage = "Du må velje målestasjon.")]
+    [Display(Name = "Temperaturkjelde")]
+    [Required(ErrorMessage = "Du må velje temperaturkjelde.")]
     public string SelectedSourceId { get; set; } =
         WeatherStationCatalog.DefaultSourceId;
 

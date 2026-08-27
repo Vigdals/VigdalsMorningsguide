@@ -22,13 +22,15 @@ public sealed class ShellyService
     private readonly ShellyOptions _options;
     private readonly ILogger<ShellyService> _logger;
     private readonly IMemoryCache _memoryCache;
+    private readonly ShellyCloudRequestGate _requestGate;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public ShellyService(
         HttpClient httpClient,
         IOptions<ShellyOptions> options,
         ILogger<ShellyService> logger,
-        IMemoryCache memoryCache)
+        IMemoryCache memoryCache,
+        ShellyCloudRequestGate requestGate)
     {
         _httpClient =
             httpClient;
@@ -41,6 +43,9 @@ public sealed class ShellyService
 
         _memoryCache =
             memoryCache;
+
+        _requestGate =
+            requestGate;
 
         _jsonOptions =
             new JsonSerializerOptions
@@ -150,6 +155,10 @@ public sealed class ShellyService
                     JsonContent.Create(
                         requestBody)
             };
+
+        await using var requestLease =
+            await _requestGate.EnterAsync(
+                cancellationToken);
 
         using var response =
             await _httpClient.SendAsync(

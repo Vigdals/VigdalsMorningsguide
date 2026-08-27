@@ -14,9 +14,21 @@ public sealed class ShellyOptions
     public string AuthKey { get; init; } =
         string.Empty;
 
+    public string DisplayName { get; init; } =
+        "Shelly i skålen i Sogndal";
+
     public int CacheSeconds { get; init; } =
         30;
 
     public int StaleAfterMinutes { get; init; } =
         30;
+
+    public double MinimumCoveragePercent { get; init; } =
+        70.0;
+
+    public int MaximumAcceptedGapMinutes { get; init; } =
+        180;
+
+    public int MaximumDaysBack { get; init; } =
+        90;
 }

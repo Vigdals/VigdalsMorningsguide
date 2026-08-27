@@ -1,0 +1,392 @@
+using System.Globalization;
+using System.Text.Json;
+using Microsoft.Extensions.Options;
+using VigdalsMorningsguide.Models;
+using VigdalsMorningsguide.Options;
+
+namespace VigdalsMorningsguide.Services;
+
+public sealed class ShellyHistoryService
+{
+    private const int DefaultMeasurementIntervalMinutes =
+        60;
+
+    private readonly HttpClient _httpClient;
+    private readonly ShellyOptions _options;
+    private readonly DegreeDayCalculationService
+        _degreeDayCalculationService;
+    private readonly ShellyCloudRequestGate _requestGate;
+    private readonly ILogger<ShellyHistoryService> _logger;
+    private readonly JsonSerializerOptions _jsonOptions;
+
+    public string DisplayName =>
+        _options.DisplayName;
+
+    public ShellyHistoryService(
+        HttpClient httpClient,
+        IOptions<ShellyOptions> options,
+        DegreeDayCalculationService degreeDayCalculationService,
+        ShellyCloudRequestGate requestGate,
+        ILogger<ShellyHistoryService> logger)
+    {
+        _httpClient =
+            httpClient;
+
+        _options =
+            options.Value;
+
+        _degreeDayCalculationService =
+            degreeDayCalculationService;
+
+        _requestGate =
+            requestGate;
+
+        _logger =
+            logger;
+
+        _jsonOptions =
+            new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+    }
+
+    public async Task<MorningResultModel> CalculateAsync(
+        DateTime hungAt,
+        double targetDegreeDays,
+        DateTime? refrigeratedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateConfiguration();
+
+        var nowUtc =
+            DateTimeOffset.UtcNow;
+
+        DegreeDayCalculationService.ValidateRequest(
+            hungAt,
+            targetDegreeDays,
+            refrigeratedAt,
+            _options.MaximumDaysBack,
+            nowUtc);
+
+        var hungAtUtc =
+            DegreeDayCalculationService
+                .ConvertNorwegianLocalToUtc(
+                    hungAt);
+
+        DateTimeOffset? refrigeratedAtUtc =
+            refrigeratedAt.HasValue
+                ? DegreeDayCalculationService
+                    .ConvertNorwegianLocalToUtc(
+                        refrigeratedAt.Value)
+                : null;
+
+        var observationEndUtc =
+            refrigeratedAtUtc.HasValue &&
+            refrigeratedAtUtc.Value < nowUtc
+                ? refrigeratedAtUtc.Value
+                : nowUtc;
+
+        var queryFromUtc =
+            hungAtUtc.AddHours(-1);
+
+        var queryToUtc =
+            observationEndUtc;
+
+        /*
+         * Shelly kan avvise den uferdige bøtta for inneverande
+         * minutt. Eitt minutt tilbake gir ei avslutta sluttramme,
+         * medan kalkulatoren framleis reknar fram til faktisk no.
+         */
+        if (queryToUtc > nowUtc.AddMinutes(-1))
+        {
+            queryToUtc =
+                nowUtc.AddMinutes(-1);
+        }
+
+        if (queryToUtc <= queryFromUtc)
+        {
+            queryFromUtc =
+                queryToUtc.AddHours(-1);
+        }
+
+        var requestUri =
+            BuildRequestUri(
+                queryFromUtc,
+                queryToUtc);
+
+        _logger.LogInformation(
+            "Hentar Shelly-temperaturhistorikk. " +
+            "Frå {DateFrom} til {DateTo}.",
+            queryFromUtc,
+            queryToUtc);
+
+        using var request =
+            new HttpRequestMessage(
+                HttpMethod.Get,
+                requestUri);
+
+        await using var requestLease =
+            await _requestGate.EnterAsync(
+                cancellationToken);
+
+        using var response =
+            await _httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+
+        var json =
+            await response.Content.ReadAsStringAsync(
+                cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Shelly Cloud returnerte HTTP {StatusCode} " +
+                "for temperaturhistorikk.",
+                (int)response.StatusCode);
+
+            throw new HttpRequestException(
+                "Shelly Cloud returnerte HTTP " +
+                $"{(int)response.StatusCode} for temperaturhistorikk.",
+                inner: null,
+                response.StatusCode);
+        }
+
+        ThrowIfApplicationError(
+            json);
+
+        var statistics =
+            JsonSerializer.Deserialize<
+                ShellyWeatherStatisticsResponse>(
+                json,
+                _jsonOptions)
+            ?? throw new JsonException(
+                "Shelly Cloud returnerte eit tomt eller " +
+                "ugyldig svar for temperaturhistorikk.");
+
+        var measurements =
+            (statistics.History ?? [])
+                .Where(entry =>
+                    entry.IsMissing is not true &&
+                    entry.Timestamp > DateTimeOffset.UnixEpoch &&
+                    entry.MeanTemperatureCelsius.HasValue)
+                .Select(entry =>
+                    new TemperatureMeasurementModel(
+                        entry.Timestamp.ToUniversalTime(),
+                        entry.MeanTemperatureCelsius!.Value))
+                .GroupBy(measurement =>
+                    measurement.UtcTimestamp)
+                .Select(group =>
+                    group.First())
+                .OrderBy(measurement =>
+                    measurement.UtcTimestamp)
+                .ToList();
+
+        if (measurements.Count == 0)
+        {
+            throw new ShellyHistoryUnavailableException(
+                "Shelly har ingen gyldige temperaturmålingar " +
+                "for den valde perioden.");
+        }
+
+        var measurementIntervalMinutes =
+            ResolveMeasurementIntervalMinutes(
+                statistics.Interval,
+                measurements);
+
+        var maximumAcceptedGapMinutes =
+            Math.Max(
+                _options.MaximumAcceptedGapMinutes,
+                measurementIntervalMinutes * 3);
+
+        _logger.LogInformation(
+            "Henta {MeasurementCount} Shelly-målingar med " +
+            "estimert intervall {IntervalMinutes} minutt.",
+            measurements.Count,
+            measurementIntervalMinutes);
+
+        return _degreeDayCalculationService.Calculate(
+            hungAt,
+            targetDegreeDays,
+            new TemperatureSourceModel
+            {
+                SourceId =
+                    TemperatureSourceCatalog.ShellySourceId,
+
+                Name =
+                    _options.DisplayName,
+
+                DistanceKilometres =
+                    0,
+
+                Latitude =
+                    0,
+
+                Longitude =
+                    0,
+
+                MetresAboveSeaLevel =
+                    null
+            },
+            refrigeratedAt,
+            measurements,
+            measurementIntervalMinutes,
+            maximumAcceptedGapMinutes,
+            _options.MinimumCoveragePercent,
+            _options.MaximumDaysBack,
+            nowUtc);
+    }
+
+    private string BuildRequestUri(
+        DateTimeOffset dateFromUtc,
+        DateTimeOffset dateToUtc)
+    {
+        /*
+         * Shelly dokumenterer ikkje statistikk-endepunktet som
+         * ein stabil del av Cloud Control API-et. Hald derfor
+         * kontrakten avgrensa til denne tenesta og valider svaret
+         * strengt, slik at endringar gir synleg feil i staden for
+         * feil døgngradeutrekning.
+         */
+        return
+            "v2/statistics/weather-station" +
+            $"?id={Encode(_options.DeviceId)}" +
+            "&channel=0" +
+            "&date_range=custom" +
+            $"&date_from={Encode(FormatUtc(dateFromUtc))}" +
+            $"&date_to={Encode(FormatUtc(dateToUtc))}" +
+            $"&auth_key={Encode(_options.AuthKey)}";
+    }
+
+    private static int ResolveMeasurementIntervalMinutes(
+        string? interval,
+        IReadOnlyList<TemperatureMeasurementModel> measurements)
+    {
+        var observedGaps =
+            measurements
+                .Zip(
+                    measurements.Skip(1),
+                    (current, next) =>
+                        (next.UtcTimestamp - current.UtcTimestamp)
+                        .TotalMinutes)
+                .Where(minutes =>
+                    double.IsFinite(minutes) &&
+                    minutes > 0 &&
+                    minutes <= 7 * 24 * 60)
+                .OrderBy(minutes =>
+                    minutes)
+                .ToList();
+
+        if (observedGaps.Count >= 2)
+        {
+            var middleIndex =
+                observedGaps.Count / 2;
+
+            var median =
+                observedGaps.Count % 2 == 0
+                    ? (
+                        observedGaps[middleIndex - 1] +
+                        observedGaps[middleIndex]
+                      ) / 2.0
+                    : observedGaps[middleIndex];
+
+            return Math.Max(
+                1,
+                (int)Math.Round(
+                    median,
+                    MidpointRounding.AwayFromZero));
+        }
+
+        return (interval ?? string.Empty)
+            .Trim()
+            .ToLowerInvariant() switch
+        {
+            "minute" => 1,
+            "hour" => 60,
+            "day" => 24 * 60,
+            _ => DefaultMeasurementIntervalMinutes
+        };
+    }
+
+    private static void ThrowIfApplicationError(
+        string json)
+    {
+        using var document =
+            JsonDocument.Parse(
+                json);
+
+        var root =
+            document.RootElement;
+
+        if (root.ValueKind is not JsonValueKind.Object ||
+            !root.TryGetProperty(
+                "isok",
+                out var isOkElement) ||
+            isOkElement.ValueKind is not JsonValueKind.False)
+        {
+            return;
+        }
+
+        throw new HttpRequestException(
+            "Shelly Cloud avviste førespurnaden om " +
+            "temperaturhistorikk.");
+    }
+
+    private void ValidateConfiguration()
+    {
+        if (string.IsNullOrWhiteSpace(
+                _options.AuthKey))
+        {
+            throw new InvalidOperationException(
+                "Shelly:AuthKey manglar.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                _options.DeviceId))
+        {
+            throw new InvalidOperationException(
+                "Shelly:DeviceId manglar.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                _options.DisplayName))
+        {
+            throw new InvalidOperationException(
+                "Shelly:DisplayName manglar.");
+        }
+
+        if (_httpClient.BaseAddress is null)
+        {
+            throw new InvalidOperationException(
+                "BaseAddress manglar på Shelly-klienten.");
+        }
+    }
+
+    private static string FormatUtc(
+        DateTimeOffset value)
+    {
+        return value
+            .ToUniversalTime()
+            .ToString(
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                CultureInfo.InvariantCulture);
+    }
+
+    private static string Encode(
+        string value)
+    {
+        return Uri.EscapeDataString(
+            value);
+    }
+}
+
+public sealed class ShellyHistoryUnavailableException : Exception
+{
+    public ShellyHistoryUnavailableException(
+        string message)
+        : base(message)
+    {
+    }
+}
