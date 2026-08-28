@@ -35,7 +35,5 @@ public sealed class FrostOptions
 
     public int MeasurementIntervalMinutes { get; init; } = 10;
 
-    public int MaximumAcceptedGapMinutes { get; init; } = 20;
-
     public int MaximumDaysBack { get; init; } = 90;
 }

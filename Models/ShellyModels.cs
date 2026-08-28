@@ -187,21 +187,19 @@ public sealed class ShellyWeatherHistoryEntry
                 return (minimum + maximum) / 2.0;
             }
 
-            if (MinimumTemperatureCelsius is double minimumOnly &&
-                double.IsFinite(minimumOnly))
-            {
-                return minimumOnly;
-            }
-
-            if (MaximumTemperatureCelsius is double maximumOnly &&
-                double.IsFinite(maximumOnly))
-            {
-                return maximumOnly;
-            }
-
             return null;
         }
     }
+
+    public bool IsTemperatureEstimated =>
+        !(AverageTemperatureCelsius is double average &&
+          double.IsFinite(average)) &&
+        !(TemperatureCelsius is double temperature &&
+          double.IsFinite(temperature)) &&
+        MinimumTemperatureCelsius is double minimum &&
+        MaximumTemperatureCelsius is double maximum &&
+        double.IsFinite(minimum) &&
+        double.IsFinite(maximum);
 }
 
 public sealed class ShellyMeasurementModel

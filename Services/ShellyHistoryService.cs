@@ -196,18 +196,15 @@ public sealed class ShellyHistoryService
 
         var measurementIntervalMinutes =
             ResolveMeasurementIntervalMinutes(
-                statistics.HistoryInterval ??
-                statistics.Interval,
+                !string.IsNullOrWhiteSpace(
+                    statistics.HistoryInterval)
+                    ? statistics.HistoryInterval
+                    : statistics.Interval,
                 measurements);
-
-        var maximumAcceptedGapMinutes =
-            Math.Max(
-                _options.MaximumAcceptedGapMinutes,
-                measurementIntervalMinutes * 3);
 
         _logger.LogInformation(
             "Henta {MeasurementCount} Shelly-målingar med " +
-            "estimert intervall {IntervalMinutes} minutt.",
+            "intervall {IntervalMinutes} minutt.",
             measurements.Count,
             measurementIntervalMinutes);
 
@@ -237,7 +234,6 @@ public sealed class ShellyHistoryService
             refrigeratedAt,
             measurements,
             measurementIntervalMinutes,
-            maximumAcceptedGapMinutes,
             _options.MinimumCoveragePercent,
             _options.MaximumDaysBack,
             nowUtc);
@@ -280,7 +276,9 @@ public sealed class ShellyHistoryService
 
         return new TemperatureMeasurementModel(
             timestampUtc,
-            temperature);
+            temperature,
+            IsEstimated:
+                entry.IsTemperatureEstimated);
     }
 
     private static bool TryParseShellyTimestamp(
@@ -335,6 +333,8 @@ public sealed class ShellyHistoryService
                 responseTimeZone);
 
         if (timeZone.IsInvalidTime(
+                localTimestamp) ||
+            timeZone.IsAmbiguousTime(
                 localTimestamp))
         {
             return false;
@@ -380,6 +380,22 @@ public sealed class ShellyHistoryService
         string? interval,
         IReadOnlyList<TemperatureMeasurementModel> measurements)
     {
+        var declaredInterval =
+            (interval ?? string.Empty)
+                .Trim()
+                .ToLowerInvariant() switch
+            {
+                "minute" => 1,
+                "hour" => 60,
+                "day" => 24 * 60,
+                _ => (int?)null
+            };
+
+        if (declaredInterval.HasValue)
+        {
+            return declaredInterval.Value;
+        }
+
         var observedGaps =
             measurements
                 .Zip(
@@ -415,15 +431,7 @@ public sealed class ShellyHistoryService
                     MidpointRounding.AwayFromZero));
         }
 
-        return (interval ?? string.Empty)
-            .Trim()
-            .ToLowerInvariant() switch
-        {
-            "minute" => 1,
-            "hour" => 60,
-            "day" => 24 * 60,
-            _ => DefaultMeasurementIntervalMinutes
-        };
+        return DefaultMeasurementIntervalMinutes;
     }
 
     private static void ThrowIfApplicationError(

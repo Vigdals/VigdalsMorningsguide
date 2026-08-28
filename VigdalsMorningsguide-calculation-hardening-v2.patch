@@ -1,0 +1,1496 @@
+diff --git a/CalculationTests/Program.cs b/CalculationTests/Program.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..2a7ee7d84a5377c35464092eb132d8aacd2ea6ed
+--- /dev/null
++++ b/CalculationTests/Program.cs
+@@ -0,0 +1,414 @@
++using VigdalsMorningsguide.Models;
++using VigdalsMorningsguide.Services;
++
++var tests = new (string Name, Action Run)[]
++{
++    ("24 timar ved 10 C gir 10 døgngrader", ConstantDay),
++    ("Del av døgn blir vekta med faktisk tid", PartialDay),
++    ("Minusgrader gir ikkje negative døgngrader", NegativeTemperature),
++    ("Kjøleskapsdagen blir delt ved klokkeslettet", SplitRefrigeratorDay),
++    ("Målehol fyller berre nominelt intervall", MeasurementGap),
++    ("Delvis dekning blir vist, men ikkje summert", PartialCoverage),
++    ("Kjøleskap frå start gir fast 4 C", RefrigeratorFromStart),
++    ("Sommartidsdøgn brukar 23 faktiske timar", SpringDstDay),
++    ("Vintertidsdøgn brukar 25 faktiske timar", AutumnDstDay),
++    ("Dagleg måleintervall toler 25-timarsdøgn", DailyMeasurementAcrossDst),
++    ("Midnatt lagar periodar utan overlapp", MidnightBoundary),
++    ("Estimerte Shelly-temperaturar blir merkte", EstimatedTemperature),
++    ("Shelly krev to endepunkt for estimert middel", ShellyMeanTemperature)
++};
++
++var failures = new List<string>();
++
++foreach (var test in tests)
++{
++    try
++    {
++        test.Run();
++        Console.WriteLine($"OK   {test.Name}");
++    }
++    catch (Exception exception)
++    {
++        failures.Add(test.Name);
++        Console.Error.WriteLine($"FEIL {test.Name}");
++        Console.Error.WriteLine($"     {exception.Message}");
++    }
++}
++
++Console.WriteLine();
++Console.WriteLine($"{tests.Length - failures.Count}/{tests.Length} testar bestått.");
++
++if (failures.Count > 0)
++{
++    Environment.ExitCode = 1;
++}
++
++return;
++
++static void ConstantDay()
++{
++    var start = Local(2026, 8, 1);
++    var end = Local(2026, 8, 2);
++    var result = Calculate(
++        start,
++        end,
++        measurements:
++        [
++            Measurement(start, 10)
++        ],
++        measurementIntervalMinutes: 24 * 60);
++
++    Near(10, result.TotalDegreeDays);
++    Near(10, result.AverageTemperature!.Value);
++    Near(100, result.CoveragePercent);
++}
++
++static void PartialDay()
++{
++    var start = Local(2026, 8, 1);
++    var end = Local(2026, 8, 1, 6);
++    var result = Calculate(
++        start,
++        end,
++        measurements:
++        [
++            Measurement(start, 12)
++        ],
++        measurementIntervalMinutes: 6 * 60);
++
++    Near(3, result.TotalDegreeDays);
++}
++
++static void NegativeTemperature()
++{
++    var start = Local(2026, 8, 1);
++    var end = Local(2026, 8, 2);
++    var result = Calculate(
++        start,
++        end,
++        measurements:
++        [
++            Measurement(start, -5)
++        ],
++        measurementIntervalMinutes: 24 * 60);
++
++    Near(0, result.TotalDegreeDays);
++    Near(-5, result.AverageTemperature!.Value);
++}
++
++static void SplitRefrigeratorDay()
++{
++    var start = Local(2026, 8, 21, 23, 36);
++    var refrigeratedAt = Local(2026, 8, 22, 23);
++    var end = Local(2026, 8, 27, 23, 37);
++    const double transitionDayTemperature =
++        (17.55 * 24 - 4) / 23;
++
++    var measurements = new List<TemperatureMeasurementModel>();
++
++    for (var cursor = start; cursor < refrigeratedAt; cursor = cursor.AddMinutes(1))
++    {
++        measurements.Add(
++            Measurement(
++                cursor,
++                cursor.Date == start.Date
++                    ? 15
++                    : transitionDayTemperature));
++    }
++
++    var result = Calculate(
++        start,
++        end,
++        refrigeratedAt,
++        measurements,
++        measurementIntervalMinutes: 1);
++
++    Near(37.7361111111, result.TotalDegreeDays, 0.000001);
++
++    var transitionDay =
++        result.Days.Single(day =>
++            day.Date == new DateOnly(2026, 8, 22));
++
++    Equal(2, transitionDay.Periods.Count);
++    Near(17.3833333333, transitionDay.Periods[0].DegreeDays, 0.000001);
++    Near(0.1666666667, transitionDay.Periods[1].DegreeDays, 0.000001);
++    Near(17.55, transitionDay.DegreeDays, 0.000001);
++    Near(
++        transitionDay.DegreeDays,
++        transitionDay.Periods.Sum(period => period.DegreeDays),
++        0.000001);
++    True(!transitionDay.Periods[0].UsesRefrigeratorTemperature);
++    True(transitionDay.Periods[1].UsesRefrigeratorTemperature);
++    Equal(refrigeratedAt, transitionDay.Periods[1].PeriodStart);
++}
++
++static void MeasurementGap()
++{
++    foreach (var gapMinutes in new[] { 90, 91 })
++    {
++        var start = Local(2026, 8, 1);
++        var end = start.AddMinutes(gapMinutes);
++        var result = Calculate(
++            start,
++            end,
++            measurements:
++            [
++                Measurement(start, 12),
++                Measurement(end, 12)
++            ],
++            measurementIntervalMinutes: 10,
++            minimumCoveragePercent: 0);
++
++        Near(
++            10.0 / gapMinutes * 100,
++            result.Days[0].Periods[0].CoveragePercent);
++        Near(12 * (10.0 / 60) / 24, result.TotalDegreeDays);
++    }
++}
++
++static void PartialCoverage()
++{
++    var start = Local(2026, 8, 1);
++    var end = start.AddMinutes(90);
++    var result = Calculate(
++        start,
++        end,
++        measurements:
++        [
++            Measurement(start, 12),
++            Measurement(end, 12)
++        ],
++        measurementIntervalMinutes: 10,
++        minimumCoveragePercent: 70);
++
++    var period = result.Days[0].Periods[0];
++    Near(0, result.TotalDegreeDays);
++    Near(12, period.MeanTemperature!.Value);
++    Near(100.0 / 9, period.CoveragePercent);
++    True(!period.IncludedInTotal);
++    Equal(1, result.IncompleteMeasuredPeriodCount);
++    True(result.EstimatedHoursRemaining is null);
++}
++
++static void RefrigeratorFromStart()
++{
++    var start = Local(2026, 8, 1);
++    var end = Local(2026, 8, 2);
++    var result = Calculate(
++        start,
++        end,
++        refrigeratedAt: start,
++        measurements: [],
++        measurementIntervalMinutes: 10);
++
++    Near(4, result.TotalDegreeDays);
++    Near(4, result.AverageTemperature!.Value);
++    Near(100, result.CoveragePercent);
++    True(result.Days[0].Periods.Single().UsesRefrigeratorTemperature);
++}
++
++static void SpringDstDay()
++{
++    var start = Local(2026, 3, 29);
++    var end = Local(2026, 3, 30);
++    var result = Calculate(
++        start,
++        end,
++        refrigeratedAt: start,
++        measurements: [],
++        measurementIntervalMinutes: 10);
++
++    Near(23, result.ElapsedTime.TotalHours);
++    Near(4 * 23.0 / 24, result.TotalDegreeDays);
++}
++
++static void AutumnDstDay()
++{
++    var start = Local(2026, 10, 25);
++    var end = Local(2026, 10, 26);
++    var result = Calculate(
++        start,
++        end,
++        refrigeratedAt: start,
++        measurements: [],
++        measurementIntervalMinutes: 10);
++
++    Near(25, result.ElapsedTime.TotalHours);
++    Near(4 * 25.0 / 24, result.TotalDegreeDays);
++}
++
++static void DailyMeasurementAcrossDst()
++{
++    var start = Local(2026, 10, 25);
++    var end = Local(2026, 10, 26);
++    var result = Calculate(
++        start,
++        end,
++        measurements:
++        [
++            Measurement(start, 10),
++            Measurement(end, 10)
++        ],
++        measurementIntervalMinutes: 24 * 60);
++
++    Near(10 * 25.0 / 24, result.TotalDegreeDays);
++    Near(100, result.CoveragePercent);
++}
++
++static void MidnightBoundary()
++{
++    var start = Local(2026, 8, 1, 23);
++    var refrigeratedAt = Local(2026, 8, 2);
++    var end = Local(2026, 8, 2, 1);
++    var result = Calculate(
++        start,
++        end,
++        refrigeratedAt,
++        measurements:
++        [
++            Measurement(start, 12)
++        ],
++        measurementIntervalMinutes: 60);
++
++    Equal(2, result.Days.Count);
++    Equal(1, result.Days[0].Periods.Count);
++    Equal(1, result.Days[1].Periods.Count);
++    Equal(refrigeratedAt, result.Days[0].Periods[0].PeriodEnd);
++    Equal(refrigeratedAt, result.Days[1].Periods[0].PeriodStart);
++    Near(2.0 / 3, result.TotalDegreeDays);
++}
++
++static void EstimatedTemperature()
++{
++    var start = Local(2026, 8, 1);
++    var end = Local(2026, 8, 2);
++    var result = Calculate(
++        start,
++        end,
++        measurements:
++        [
++            Measurement(start, 10, isEstimated: true)
++        ],
++        measurementIntervalMinutes: 24 * 60);
++
++    True(result.UsesEstimatedTemperatures);
++}
++
++static void ShellyMeanTemperature()
++{
++    var minimumOnly = new ShellyWeatherHistoryEntry
++    {
++        MinimumTemperatureCelsius = 8
++    };
++
++    True(minimumOnly.MeanTemperatureCelsius is null);
++    True(!minimumOnly.IsTemperatureEstimated);
++
++    var range = new ShellyWeatherHistoryEntry
++    {
++        MinimumTemperatureCelsius = 8,
++        MaximumTemperatureCelsius = 14
++    };
++
++    Near(11, range.MeanTemperatureCelsius!.Value);
++    True(range.IsTemperatureEstimated);
++
++    var average = new ShellyWeatherHistoryEntry
++    {
++        MinimumTemperatureCelsius = 8,
++        MaximumTemperatureCelsius = 14,
++        AverageTemperatureCelsius = 10.5
++    };
++
++    Near(10.5, average.MeanTemperatureCelsius!.Value);
++    True(!average.IsTemperatureEstimated);
++}
++
++static MorningResultModel Calculate(
++    DateTime start,
++    DateTime end,
++    DateTime? refrigeratedAt = null,
++    IReadOnlyList<TemperatureMeasurementModel>? measurements = null,
++    int measurementIntervalMinutes = 10,
++    double minimumCoveragePercent = 70)
++{
++    return new DegreeDayCalculationService().Calculate(
++        start,
++        80,
++        new TemperatureSourceModel
++        {
++            SourceId = "TEST",
++            Name = "Testmålar",
++            DistanceKilometres = 0,
++            Latitude = 61,
++            Longitude = 7
++        },
++        refrigeratedAt,
++        measurements ?? [],
++        measurementIntervalMinutes,
++        minimumCoveragePercent,
++        370,
++        DegreeDayCalculationService.ConvertNorwegianLocalToUtc(end));
++}
++
++static TemperatureMeasurementModel Measurement(
++    DateTime localTimestamp,
++    double temperature,
++    bool isEstimated = false)
++{
++    return new TemperatureMeasurementModel(
++        DegreeDayCalculationService.ConvertNorwegianLocalToUtc(
++            localTimestamp),
++        temperature,
++        IsEstimated: isEstimated);
++}
++
++static DateTime Local(
++    int year,
++    int month,
++    int day,
++    int hour = 0,
++    int minute = 0)
++{
++    return new DateTime(
++        year,
++        month,
++        day,
++        hour,
++        minute,
++        0,
++        DateTimeKind.Unspecified);
++}
++
++static void Near(
++    double expected,
++    double actual,
++    double tolerance = 0.0000001)
++{
++    if (Math.Abs(expected - actual) > tolerance)
++    {
++        throw new InvalidOperationException(
++            $"Venta {expected}, fekk {actual}.");
++    }
++}
++
++static void Equal<T>(
++    T expected,
++    T actual)
++    where T : notnull
++{
++    if (!EqualityComparer<T>.Default.Equals(expected, actual))
++    {
++        throw new InvalidOperationException(
++            $"Venta {expected}, fekk {actual}.");
++    }
++}
++
++static void True(bool condition)
++{
++    if (!condition)
++    {
++        throw new InvalidOperationException(
++            "Vilkåret var ikkje oppfylt.");
++    }
++}
+diff --git a/CalculationTests/VigdalsMorningsguide.CalculationTests.csproj b/CalculationTests/VigdalsMorningsguide.CalculationTests.csproj
+new file mode 100644
+index 0000000000000000000000000000000000000000..b8b435c68af82db217bcef37e14fe07529ee93d3
+--- /dev/null
++++ b/CalculationTests/VigdalsMorningsguide.CalculationTests.csproj
+@@ -0,0 +1,14 @@
++<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <OutputType>Exe</OutputType>
++    <TargetFramework>net10.0</TargetFramework>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="../VigdalsMorningsguide.csproj" />
++  </ItemGroup>
++
++</Project>
+diff --git a/Controllers/MorningController.cs b/Controllers/MorningController.cs
+index 98b57ee9fcdc9065f1d238dab0461b73dfb5a772..19078319bfa13cc41b776b7189b02d8c0d1a9103 100644
+--- a/Controllers/MorningController.cs
++++ b/Controllers/MorningController.cs
+@@ -77,8 +77,8 @@ public sealed class MorningController : Controller
+                                 defaultTime),
+ 
+                         SelectedSourceId =
+-                            WeatherStationCatalog
+-                                .DefaultSourceId,
++                            TemperatureSourceCatalog
++                                .ShellySourceId,
+ 
+                         TargetDegreeDays =
+                             80,
+@@ -522,6 +522,9 @@ public sealed class MorningController : Controller
+             model.Input.RefrigeratedFromDate =
+                 null;
+ 
++            model.Input.RefrigeratedFromTime =
++                null;
++
+             return;
+         }
+ 
+@@ -531,33 +534,71 @@ public sealed class MorningController : Controller
+                 "Input.RefrigeratedFromDate",
+                 "Vel datoen kjøtet vart lagt i kjøleskap.");
+ 
+-            return;
+         }
+ 
+-        if (model.Input.RefrigeratedFromDate.Value <
+-            model.Input.HungDate)
++        if (!model.Input.RefrigeratedFromTime.HasValue)
+         {
+             ModelState.AddModelError(
+-                "Input.RefrigeratedFromDate",
+-                "Kjøleskapsdatoen kan ikkje vere før " +
+-                "opphengsdatoen.");
++                "Input.RefrigeratedFromTime",
++                "Vel klokkeslettet kjøtet vart lagt i kjøleskap.");
++        }
++
++        if (!model.Input.RefrigeratedFromDate.HasValue ||
++            !model.Input.RefrigeratedFromTime.HasValue)
++        {
++            return;
+         }
+ 
++        var refrigeratedAt =
++            DateTime.SpecifyKind(
++                model.Input.RefrigeratedFromDate.Value.ToDateTime(
++                    model.Input.RefrigeratedFromTime.Value),
++                DateTimeKind.Unspecified);
++
++        var hungAt =
++            model.Input.GetHungAt();
++
+         var nowNorwegian =
+             TimeZoneInfo.ConvertTime(
+                 DateTimeOffset.UtcNow,
+                 NorwegianTimeZone);
+ 
+-        var today =
+-            DateOnly.FromDateTime(
+-                nowNorwegian.DateTime);
++        var nowLocal =
++            DateTime.SpecifyKind(
++                nowNorwegian.DateTime,
++                DateTimeKind.Unspecified);
+ 
+-        if (model.Input.RefrigeratedFromDate.Value >
+-            today)
++        if (refrigeratedAt < hungAt)
+         {
+             ModelState.AddModelError(
+-                "Input.RefrigeratedFromDate",
+-                "Kjøleskapsdatoen kan ikkje vere fram i tid.");
++                "Input.RefrigeratedFromTime",
++                "Kjøleskapstidspunktet kan ikkje vere før " +
++                "opphengstidspunktet.");
++        }
++
++        if (refrigeratedAt > nowLocal)
++        {
++            ModelState.AddModelError(
++                "Input.RefrigeratedFromTime",
++                "Kjøleskapstidspunktet kan ikkje vere fram i tid.");
++        }
++
++        if (NorwegianTimeZone.IsInvalidTime(
++                refrigeratedAt))
++        {
++            ModelState.AddModelError(
++                "Input.RefrigeratedFromTime",
++                "Tidspunktet finst ikkje på grunn av overgang " +
++                "til sommartid.");
++        }
++
++        if (NorwegianTimeZone.IsAmbiguousTime(
++                refrigeratedAt))
++        {
++            ModelState.AddModelError(
++                "Input.RefrigeratedFromTime",
++                "Tidspunktet er tvitydig på grunn av overgang " +
++                "frå sommartid. Vel eit anna klokkeslett.");
+         }
+     }
+     private void PopulateTemperatureSourceOptions(
+diff --git a/Models/MorningInputModel.cs b/Models/MorningInputModel.cs
+index e6dc4fba337f726dec60f000f37423b50c42f498..8b3f196b963d4b1bb40c544b49e2d4c1a4805946 100644
+--- a/Models/MorningInputModel.cs
++++ b/Models/MorningInputModel.cs
+@@ -17,7 +17,7 @@ public sealed class MorningInputModel
+     [Display(Name = "Temperaturkjelde")]
+     [Required(ErrorMessage = "Du må velje temperaturkjelde.")]
+     public string SelectedSourceId { get; set; } =
+-        WeatherStationCatalog.DefaultSourceId;
++        TemperatureSourceCatalog.ShellySourceId;
+ 
+     [Display(Name = "Mål for døgngrader")]
+     [Range(
+diff --git a/Models/MorningResultModel.cs b/Models/MorningResultModel.cs
+index 1572d8810a68095b5f20c80bc82b9d2142199aec..abf5809845229fb77b35e5b624b6942ee907996d 100644
+--- a/Models/MorningResultModel.cs
++++ b/Models/MorningResultModel.cs
+@@ -6,9 +6,16 @@ public sealed class MorningResultModel
+ 
+     public DateTime CalculatedAt { get; init; }
+ 
++    public DateTimeOffset HungAtUtc { get; init; }
++
+     public DateTimeOffset CalculatedAtUtc { get; init; }
++
+     public DateTime? RefrigeratedAt { get; init; }
++
+     public double? RefrigeratorTemperatureCelsius { get; init; }
++
++    public bool UsesEstimatedTemperatures { get; init; }
++
+     public string SourceId { get; init; } =
+         string.Empty;
+ 
+@@ -37,8 +44,8 @@ public sealed class MorningResultModel
+         [];
+ 
+     public TimeSpan ElapsedTime =>
+-        CalculatedAt > HungAt
+-            ? CalculatedAt - HungAt
++        CalculatedAtUtc > HungAtUtc
++            ? CalculatedAtUtc - HungAtUtc
+             : TimeSpan.Zero;
+ 
+     public int ElapsedWholeDays =>
+@@ -69,6 +76,7 @@ public sealed class MorningResultModel
+ 
+     public double? EstimatedHoursRemaining =>
+         !TargetReached &&
++        ExcludedDayCount == 0 &&
+         AverageTemperature is > 0
+             ? RemainingDegreeDays /
+               AverageTemperature.Value *
+@@ -82,6 +90,14 @@ public sealed class MorningResultModel
+     public int ExcludedDayCount =>
+         Days.Count(day =>
+             !day.IncludedInTotal);
++
++    public int IncompleteMeasuredPeriodCount =>
++        Days
++            .SelectMany(day =>
++                day.Periods)
++            .Count(period =>
++                !period.UsesRefrigeratorTemperature &&
++                period.CoveragePercent < 99.999);
+ }
+ 
+ public sealed class MorningDayModel
+@@ -127,6 +143,8 @@ public sealed class MorningDayPeriodModel
+ 
+     public bool UsesRefrigeratorTemperature { get; init; }
+ 
++    public double CoveragePercent { get; init; }
++
+     public double DegreeDays { get; init; }
+ 
+     public double AccumulatedDegreeDays { get; init; }
+diff --git a/Models/ShellyModels.cs b/Models/ShellyModels.cs
+index 6f97e956a90c049c14d1b4b4eca30fb19c6928cc..43f51623df42ab1fb9531fa2e2896c3271ef0637 100644
+--- a/Models/ShellyModels.cs
++++ b/Models/ShellyModels.cs
+@@ -187,21 +187,19 @@ public sealed class ShellyWeatherHistoryEntry
+                 return (minimum + maximum) / 2.0;
+             }
+ 
+-            if (MinimumTemperatureCelsius is double minimumOnly &&
+-                double.IsFinite(minimumOnly))
+-            {
+-                return minimumOnly;
+-            }
+-
+-            if (MaximumTemperatureCelsius is double maximumOnly &&
+-                double.IsFinite(maximumOnly))
+-            {
+-                return maximumOnly;
+-            }
+-
+             return null;
+         }
+     }
++
++    public bool IsTemperatureEstimated =>
++        !(AverageTemperatureCelsius is double average &&
++          double.IsFinite(average)) &&
++        !(TemperatureCelsius is double temperature &&
++          double.IsFinite(temperature)) &&
++        MinimumTemperatureCelsius is double minimum &&
++        MaximumTemperatureCelsius is double maximum &&
++        double.IsFinite(minimum) &&
++        double.IsFinite(maximum);
+ }
+ 
+ public sealed class ShellyMeasurementModel
+diff --git a/Models/TemperatureSeriesModels.cs b/Models/TemperatureSeriesModels.cs
+index ad320b8f419b56333bea65ce10770c15f0e6ce84..ebf266ed5ea31a11888f5e497148981745e2483a 100644
+--- a/Models/TemperatureSeriesModels.cs
++++ b/Models/TemperatureSeriesModels.cs
+@@ -3,7 +3,8 @@ namespace VigdalsMorningsguide.Models;
+ public sealed record TemperatureMeasurementModel(
+     DateTimeOffset UtcTimestamp,
+     double Temperature,
+-    int? QualityCode = null);
++    int? QualityCode = null,
++    bool IsEstimated = false);
+ 
+ public sealed class TemperatureSourceModel
+ {
+diff --git a/Options/FrostOptions.cs b/Options/FrostOptions.cs
+index ef54802305d201ccc2e486e703972b970cf24db6..465988b2fc674dcaa3add0f836e1bebbc08fedeb 100644
+--- a/Options/FrostOptions.cs
++++ b/Options/FrostOptions.cs
+@@ -35,7 +35,5 @@ public sealed class FrostOptions
+ 
+     public int MeasurementIntervalMinutes { get; init; } = 10;
+ 
+-    public int MaximumAcceptedGapMinutes { get; init; } = 20;
+-
+     public int MaximumDaysBack { get; init; } = 90;
+-}
+\ No newline at end of file
++}
+diff --git a/Options/ShellyOptions.cs b/Options/ShellyOptions.cs
+index cc650a7656e00544b49997672f03747ee51bcb34..db1912f0243de720c34cb18c89d3252e2d543af0 100644
+--- a/Options/ShellyOptions.cs
++++ b/Options/ShellyOptions.cs
+@@ -15,7 +15,7 @@ public sealed class ShellyOptions
+         string.Empty;
+ 
+     public string DisplayName { get; init; } =
+-        "Shelly i skålen i Sogndal";
++        "Skålen i Sogndal";
+ 
+     public int CacheSeconds { get; init; } =
+         30;
+@@ -26,9 +26,6 @@ public sealed class ShellyOptions
+     public double MinimumCoveragePercent { get; init; } =
+         70.0;
+ 
+-    public int MaximumAcceptedGapMinutes { get; init; } =
+-        180;
+-
+     public int MaximumDaysBack { get; init; } =
+         90;
+ }
+diff --git a/Program.cs b/Program.cs
+index 1698f2066fad501aca13bed3afa8dcf6bc19d89f..3076ee342f9866bd8d2224d1d6f62cb89cae331e 100644
+--- a/Program.cs
++++ b/Program.cs
+@@ -110,10 +110,6 @@ builder.Services
+             options.MinimumCoveragePercent
+             is >= 0 and <= 100,
+         "Shelly:MinimumCoveragePercent må vere mellom 0 og 100.")
+-    .Validate(
+-        options =>
+-            options.MaximumAcceptedGapMinutes > 0,
+-        "Shelly:MaximumAcceptedGapMinutes må vere større enn null.")
+     .Validate(
+         options =>
+             options.MaximumDaysBack > 0,
+diff --git a/README.md b/README.md
+index d03f4997b821ff1d5bf2f0e768800075b26a4648..d1932430ad82386f88b840559a5997c052517151 100644
+--- a/README.md
++++ b/README.md
+@@ -98,6 +98,29 @@ dotnet run
+ 
+ Ikkje legg Shelly-nøkkelen i `appsettings.json` eller i Git.
+ 
++## Utrekningsmodell
++
++- Døgngrader blir integrerte med faktisk tid i UTC, slik at norske
++  sommar- og vintertidsdøgn blir rekna som høvesvis 23 og 25 timar.
++- Temperaturen blir halden i det nominelle måleintervallet. Små avvik i
++  rapporteringstid blir tolererte, men manglande punkt fyller ikkje lange
++  hol i historikken.
++- Periodar med lågare datadekning enn kjelda sitt minstekrav blir viste,
++  men blir ikkje lagde til døgngradtotalen.
++- Etter det registrerte kjøleskapstidspunktet blir fast 4 °C brukt.
++  Dagen blir delt i ein målt periode før tidspunktet og ein
++  kjøleskapsperiode etter tidspunktet.
++- Temperatur under 0 °C gir 0 døgngrader. Den målte
++  gjennomsnittstemperaturen blir likevel vist.
++- Dersom Shelly berre leverer minimum og maksimum for eit intervall,
++  blir middelverdien brukt som eit uttrykkeleg merkt estimat.
++
++Køyr dei frittståande regresjonstestane utan ekstra testpakkar:
++
++```bash
++dotnet run --project CalculationTests/VigdalsMorningsguide.CalculationTests.csproj
++```
++
+ ---
+ 
+ # Produksjon
+diff --git a/Services/DegreeDayCalculationService.cs b/Services/DegreeDayCalculationService.cs
+index 8a9a38da42b05ce120a77c52b862d4ab32e121bc..0ea82961076476473ca52d3616a361196a5b09f2 100644
+--- a/Services/DegreeDayCalculationService.cs
++++ b/Services/DegreeDayCalculationService.cs
+@@ -18,7 +18,6 @@ public sealed class DegreeDayCalculationService
+         DateTime? refrigeratedAt,
+         IReadOnlyList<TemperatureMeasurementModel> measurements,
+         int measurementIntervalMinutes,
+-        int maximumAcceptedGapMinutes,
+         double minimumCoveragePercent,
+         int maximumDaysBack,
+         DateTimeOffset? calculatedAtUtc = null)
+@@ -31,7 +30,6 @@ public sealed class DegreeDayCalculationService
+ 
+         ValidateSettings(
+             measurementIntervalMinutes,
+-            maximumAcceptedGapMinutes,
+             minimumCoveragePercent,
+             maximumDaysBack);
+ 
+@@ -108,7 +106,6 @@ public sealed class DegreeDayCalculationService
+             source,
+             refrigeratedAtLocal,
+             measurementIntervalMinutes,
+-            maximumAcceptedGapMinutes,
+             minimumCoveragePercent);
+     }
+ 
+@@ -122,7 +119,6 @@ public sealed class DegreeDayCalculationService
+         TemperatureSourceModel source,
+         DateTime? refrigeratedAtLocal,
+         int measurementIntervalMinutes,
+-        int maximumAcceptedGapMinutes,
+         double minimumCoveragePercent)
+     {
+         var dailyResults =
+@@ -131,15 +127,18 @@ public sealed class DegreeDayCalculationService
+         var accumulatedDegreeDays =
+             0.0;
+ 
+-        var includedWeightedTemperatureHours =
++        var observedWeightedTemperatureHours =
+             0.0;
+ 
+-        var includedCoveredHours =
++        var observedCoveredHours =
+             0.0;
+ 
+         var totalCoveredHours =
+             0.0;
+ 
++        var usesEstimatedTemperatures =
++            false;
++
+         var firstDate =
+             DateOnly.FromDateTime(
+                 hungAtLocal);
+@@ -228,10 +227,13 @@ public sealed class DegreeDayCalculationService
+             var outdoorDegreeDays =
+                 0.0;
+ 
+-            var outdoorWeightedTemperatureHours =
++            var outdoorObservedWeightedTemperatureHours =
++                0.0;
++
++            var outdoorObservedHours =
+                 0.0;
+ 
+-            var outdoorCoveredHours =
++            var outdoorCoveragePercent =
+                 0.0;
+ 
+             var outdoorDurationHours =
+@@ -268,10 +270,9 @@ public sealed class DegreeDayCalculationService
+                         measurements,
+                         outdoorStartUtc,
+                         outdoorEndUtc,
+-                        measurementIntervalMinutes,
+-                        maximumAcceptedGapMinutes);
++                        measurementIntervalMinutes);
+ 
+-                var outdoorCoveragePercent =
++                outdoorCoveragePercent =
+                     outdoorDurationHours <= 0
+                         ? 0
+                         : Math.Min(
+@@ -288,22 +289,25 @@ public sealed class DegreeDayCalculationService
+                 totalCoveredHours +=
+                     integration.CoveredHours;
+ 
+-                if (outdoorIncluded)
+-                {
+-                    outdoorDegreeDays =
+-                        integration.DegreeDays;
++                outdoorObservedWeightedTemperatureHours =
++                    integration.WeightedTemperatureHours;
++
++                outdoorObservedHours =
++                    integration.CoveredHours;
+ 
+-                    outdoorWeightedTemperatureHours =
+-                        integration.WeightedTemperatureHours;
++                observedWeightedTemperatureHours +=
++                    integration.WeightedTemperatureHours;
+ 
+-                    outdoorCoveredHours =
+-                        integration.CoveredHours;
++                observedCoveredHours +=
++                    integration.CoveredHours;
+ 
+-                    includedWeightedTemperatureHours +=
+-                        integration.WeightedTemperatureHours;
++                usesEstimatedTemperatures |=
++                    integration.UsesEstimatedTemperature;
+ 
+-                    includedCoveredHours +=
+-                        integration.CoveredHours;
++                if (outdoorIncluded)
++                {
++                    outdoorDegreeDays =
++                        integration.DegreeDays;
+                 }
+ 
+                 observationCount =
+@@ -364,10 +368,10 @@ public sealed class DegreeDayCalculationService
+                     totalCoveredHours +=
+                         refrigeratorHours;
+ 
+-                    includedWeightedTemperatureHours +=
++                    observedWeightedTemperatureHours +=
+                         refrigeratorWeightedTemperatureHours;
+ 
+-                    includedCoveredHours +=
++                    observedCoveredHours +=
+                         refrigeratorHours;
+                 }
+             }
+@@ -395,10 +399,10 @@ public sealed class DegreeDayCalculationService
+                             outdoorEndLocal,
+ 
+                         MeanTemperature =
+-                            outdoorCoveredHours <= 0
++                            outdoorObservedHours <= 0
+                                 ? null
+-                                : outdoorWeightedTemperatureHours /
+-                                  outdoorCoveredHours,
++                                : outdoorObservedWeightedTemperatureHours /
++                                  outdoorObservedHours,
+ 
+                         IncludedInTotal =
+                             outdoorIncluded,
+@@ -406,6 +410,9 @@ public sealed class DegreeDayCalculationService
+                         UsesRefrigeratorTemperature =
+                             false,
+ 
++                        CoveragePercent =
++                            outdoorCoveragePercent,
++
+                         DegreeDays =
+                             outdoorDegreeDays,
+ 
+@@ -436,6 +443,9 @@ public sealed class DegreeDayCalculationService
+                         UsesRefrigeratorTemperature =
+                             true,
+ 
++                        CoveragePercent =
++                            100,
++
+                         DegreeDays =
+                             refrigeratorDegreeDays,
+ 
+@@ -450,11 +460,11 @@ public sealed class DegreeDayCalculationService
+                 degreeDays;
+ 
+             var dayCoveredHours =
+-                outdoorCoveredHours +
++                outdoorObservedHours +
+                 refrigeratorHours;
+ 
+             var dayWeightedTemperatureHours =
+-                outdoorWeightedTemperatureHours +
++                outdoorObservedWeightedTemperatureHours +
+                 refrigeratorWeightedTemperatureHours;
+ 
+             double? meanTemperature =
+@@ -469,7 +479,7 @@ public sealed class DegreeDayCalculationService
+                     : Math.Min(
+                         100,
+                         (
+-                            outdoorCoveredHours +
++                            outdoorObservedHours +
+                             refrigeratorHours
+                         ) /
+                         segmentDurationHours *
+@@ -537,10 +547,10 @@ public sealed class DegreeDayCalculationService
+                     100);
+ 
+         double? averageTemperature =
+-            includedCoveredHours <= 0
++            observedCoveredHours <= 0
+                 ? null
+-                : includedWeightedTemperatureHours /
+-                  includedCoveredHours;
++                : observedWeightedTemperatureHours /
++                  observedCoveredHours;
+ 
+         var observationCountInPeriod =
+             measurements.Count(measurement =>
+@@ -552,6 +562,9 @@ public sealed class DegreeDayCalculationService
+             HungAt =
+                 hungAtLocal,
+ 
++            HungAtUtc =
++                periodStartUtc,
++
+             CalculatedAt =
+                 calculatedAtLocal,
+ 
+@@ -566,6 +579,9 @@ public sealed class DegreeDayCalculationService
+                     ? RefrigeratorTemperatureCelsius
+                     : null,
+ 
++            UsesEstimatedTemperatures =
++                usesEstimatedTemperatures,
++
+             SourceId =
+                 source.SourceId,
+ 
+@@ -608,8 +624,7 @@ public sealed class DegreeDayCalculationService
+         IReadOnlyList<TemperatureMeasurementModel> measurements,
+         DateTimeOffset periodStart,
+         DateTimeOffset periodEnd,
+-        int measurementIntervalMinutes,
+-        int maximumAcceptedGapMinutes)
++        int measurementIntervalMinutes)
+     {
+         if (measurements.Count == 0 ||
+             periodEnd <= periodStart)
+@@ -626,6 +641,21 @@ public sealed class DegreeDayCalculationService
+         var coveredHours =
+             0.0;
+ 
++        var usesEstimatedTemperature =
++            false;
++
++        var nominalInterval =
++            TimeSpan.FromMinutes(
++                measurementIntervalMinutes);
++
++        var jitterTolerance =
++            TimeSpan.FromMinutes(
++                Math.Min(
++                    60,
++                    Math.Max(
++                        1,
++                        measurementIntervalMinutes * 0.10)));
++
+         for (
+             var index = 0;
+             index < measurements.Count;
+@@ -634,20 +664,27 @@ public sealed class DegreeDayCalculationService
+             var current =
+                 measurements[index];
+ 
+-            var nextTimestamp =
+-                index + 1 < measurements.Count
+-                    ? measurements[index + 1].UtcTimestamp
+-                    : current.UtcTimestamp.AddMinutes(
+-                        measurementIntervalMinutes);
++            var nominalEnd =
++                current.UtcTimestamp +
++                nominalInterval;
+ 
+-            var gapMinutes =
+-                (nextTimestamp - current.UtcTimestamp)
+-                .TotalMinutes;
++            var intervalEndFromData =
++                nominalEnd;
+ 
+-            if (gapMinutes <= 0 ||
+-                gapMinutes > maximumAcceptedGapMinutes)
++            if (index + 1 < measurements.Count)
+             {
+-                continue;
++                var nextTimestamp =
++                    measurements[index + 1].UtcTimestamp;
++
++                var gap =
++                    nextTimestamp - current.UtcTimestamp;
++
++                if (gap > TimeSpan.Zero &&
++                    gap <= nominalInterval + jitterTolerance)
++                {
++                    intervalEndFromData =
++                        nextTimestamp;
++                }
+             }
+ 
+             var intervalStart =
+@@ -656,8 +693,8 @@ public sealed class DegreeDayCalculationService
+                     : periodStart;
+ 
+             var intervalEnd =
+-                nextTimestamp < periodEnd
+-                    ? nextTimestamp
++                intervalEndFromData < periodEnd
++                    ? intervalEndFromData
+                     : periodEnd;
+ 
+             if (intervalEnd <= intervalStart)
+@@ -682,12 +719,16 @@ public sealed class DegreeDayCalculationService
+ 
+             coveredHours +=
+                 intervalHours;
++
++            usesEstimatedTemperature |=
++                current.IsEstimated;
+         }
+ 
+         return new IntegrationResult(
+             totalDegreeDays,
+             weightedTemperatureHours,
+-            coveredHours);
++            coveredHours,
++            usesEstimatedTemperature);
+     }
+ 
+     private static int CalculateExpectedObservationCount(
+@@ -711,7 +752,6 @@ public sealed class DegreeDayCalculationService
+ 
+     private static void ValidateSettings(
+         int measurementIntervalMinutes,
+-        int maximumAcceptedGapMinutes,
+         double minimumCoveragePercent,
+         int maximumDaysBack)
+     {
+@@ -729,15 +769,6 @@ public sealed class DegreeDayCalculationService
+                 "Måleintervallet må vere større enn null.");
+         }
+ 
+-        if (maximumAcceptedGapMinutes <
+-            measurementIntervalMinutes)
+-        {
+-            throw new ArgumentOutOfRangeException(
+-                nameof(maximumAcceptedGapMinutes),
+-                "Største godtekne målehol kan ikkje vere " +
+-                "mindre enn måleintervallet.");
+-        }
+-
+         if (maximumDaysBack <= 0)
+         {
+             throw new ArgumentOutOfRangeException(
+@@ -935,12 +966,14 @@ public sealed class DegreeDayCalculationService
+     private sealed record IntegrationResult(
+         double DegreeDays,
+         double WeightedTemperatureHours,
+-        double CoveredHours)
++        double CoveredHours,
++        bool UsesEstimatedTemperature)
+     {
+         public static IntegrationResult Empty { get; } =
+             new(
+                 DegreeDays: 0,
+                 WeightedTemperatureHours: 0,
+-                CoveredHours: 0);
++                CoveredHours: 0,
++                UsesEstimatedTemperature: false);
+     }
+ }
+diff --git a/Services/FrostService.cs b/Services/FrostService.cs
+index 5d7482b9ebb58221e21cdd04cc668f493db94eb6..b8c4dcca48278c04b3a8589a883b82efbc0f8954 100644
+--- a/Services/FrostService.cs
++++ b/Services/FrostService.cs
+@@ -229,7 +229,6 @@ public sealed class FrostService
+             refrigeratedAtLocal,
+             measurements,
+             _options.MeasurementIntervalMinutes,
+-            _options.MaximumAcceptedGapMinutes,
+             _options.MinimumCoveragePercent,
+             _options.MaximumDaysBack,
+             nowUtc);
+@@ -246,7 +245,9 @@ public sealed class FrostService
+                         string.Equals(
+                             observation.ElementId,
+                             elementId,
+-                            StringComparison.Ordinal))
++                            StringComparison.Ordinal) &&
++                        observation.QualityCode
++                            is >= 0 and <= 4)
+                     .Select(observation =>
+                         new TemperatureMeasurementModel(
+                             dataPoint.ReferenceTime.ToUniversalTime(),
+@@ -276,7 +277,8 @@ public sealed class FrostService
+             $"&elements={Encode(station.ElementId)}" +
+             $"&timeoffsets={Encode(station.TimeOffset)}" +
+             $"&timeresolutions={Encode(station.TimeResolution)}" +
+-            $"&timeseriesids={station.TimeSeriesId}";
++            $"&timeseriesids={station.TimeSeriesId}" +
++            "&qualities=0,1,2,3,4";
+ 
+         if (station.Level.HasValue)
+         {
+@@ -439,14 +441,6 @@ public sealed class FrostService
+                 "større enn null.");
+         }
+ 
+-        if (_options.MaximumAcceptedGapMinutes <
+-            _options.MeasurementIntervalMinutes)
+-        {
+-            throw new InvalidOperationException(
+-                "Frost:MaximumAcceptedGapMinutes kan ikkje vere " +
+-                "mindre enn måleintervallet.");
+-        }
+-
+         if (_options.MaximumDaysBack <= 0)
+         {
+             throw new InvalidOperationException(
+diff --git a/Services/ShellyHistoryService.cs b/Services/ShellyHistoryService.cs
+index f8b5ba8e2baa24be365af75e2b83a298b47d80d8..873c00410a6e8a735a503b2b0744a6c6af88dff3 100644
+--- a/Services/ShellyHistoryService.cs
++++ b/Services/ShellyHistoryService.cs
+@@ -196,18 +196,15 @@ public sealed class ShellyHistoryService
+ 
+         var measurementIntervalMinutes =
+             ResolveMeasurementIntervalMinutes(
+-                statistics.HistoryInterval ??
+-                statistics.Interval,
++                !string.IsNullOrWhiteSpace(
++                    statistics.HistoryInterval)
++                    ? statistics.HistoryInterval
++                    : statistics.Interval,
+                 measurements);
+ 
+-        var maximumAcceptedGapMinutes =
+-            Math.Max(
+-                _options.MaximumAcceptedGapMinutes,
+-                measurementIntervalMinutes * 3);
+-
+         _logger.LogInformation(
+             "Henta {MeasurementCount} Shelly-målingar med " +
+-            "estimert intervall {IntervalMinutes} minutt.",
++            "intervall {IntervalMinutes} minutt.",
+             measurements.Count,
+             measurementIntervalMinutes);
+ 
+@@ -237,7 +234,6 @@ public sealed class ShellyHistoryService
+             refrigeratedAt,
+             measurements,
+             measurementIntervalMinutes,
+-            maximumAcceptedGapMinutes,
+             _options.MinimumCoveragePercent,
+             _options.MaximumDaysBack,
+             nowUtc);
+@@ -280,7 +276,9 @@ public sealed class ShellyHistoryService
+ 
+         return new TemperatureMeasurementModel(
+             timestampUtc,
+-            temperature);
++            temperature,
++            IsEstimated:
++                entry.IsTemperatureEstimated);
+     }
+ 
+     private static bool TryParseShellyTimestamp(
+@@ -335,6 +333,8 @@ public sealed class ShellyHistoryService
+                 responseTimeZone);
+ 
+         if (timeZone.IsInvalidTime(
++                localTimestamp) ||
++            timeZone.IsAmbiguousTime(
+                 localTimestamp))
+         {
+             return false;
+@@ -380,6 +380,22 @@ public sealed class ShellyHistoryService
+         string? interval,
+         IReadOnlyList<TemperatureMeasurementModel> measurements)
+     {
++        var declaredInterval =
++            (interval ?? string.Empty)
++                .Trim()
++                .ToLowerInvariant() switch
++            {
++                "minute" => 1,
++                "hour" => 60,
++                "day" => 24 * 60,
++                _ => (int?)null
++            };
++
++        if (declaredInterval.HasValue)
++        {
++            return declaredInterval.Value;
++        }
++
+         var observedGaps =
+             measurements
+                 .Zip(
+@@ -415,15 +431,7 @@ public sealed class ShellyHistoryService
+                     MidpointRounding.AwayFromZero));
+         }
+ 
+-        return (interval ?? string.Empty)
+-            .Trim()
+-            .ToLowerInvariant() switch
+-        {
+-            "minute" => 1,
+-            "hour" => 60,
+-            "day" => 24 * 60,
+-            _ => DefaultMeasurementIntervalMinutes
+-        };
++        return DefaultMeasurementIntervalMinutes;
+     }
+ 
+     private static void ThrowIfApplicationError(
+diff --git a/Views/Morning/Index.cshtml b/Views/Morning/Index.cshtml
+index 9dd076812f6fd2994ee0962f977a8dd523ce7a05..b118041924070eab7cec5d7450a00367e9e315c5 100644
+--- a/Views/Morning/Index.cshtml
++++ b/Views/Morning/Index.cshtml
+@@ -130,9 +130,9 @@
+                                 </label>
+                             </div>
+ 
+-                            <div id="refrigerator-help" class="form-text mt-0">
+-                                Valfritt. Dersom kjøtet er lagt i kjøleskap,
+-                                reknar kalkulatoren med fast 4 °C frå den valde datoen.
++                            <div id="refrigerator-help" class="form-text mt-0">
++                                Valfritt. Dersom kjøtet er lagt i kjøleskap,
++                                reknar kalkulatoren med fast 4 °C frå det valde tidspunktet.
+                             </div>
+                         </div>
+                     </div>
+@@ -481,15 +481,40 @@
+                     </div>
+                 }
+ 
+-                @if (result.ExcludedDayCount > 0)
+-                {
+-                    <div class="alert alert-warning mb-4" role="alert">
+-
+-                        Nokre periodar manglar tilstrekkelege
+-                        temperaturmålingar. Utrekninga kan derfor vere
+-                        mindre presis.
+-                    </div>
+-                }
++                @if (result.IncompleteMeasuredPeriodCount > 0)
++                {
++                    <div class="alert alert-warning mb-4" role="alert">
++
++                        @if (result.IncompleteMeasuredPeriodCount == 1)
++                        {
++                            <text>Éin målt periode har hol i temperaturdata.</text>
++                        }
++                        else
++                        {
++                            <text>
++                                @result.IncompleteMeasuredPeriodCount målte
++                                periodar har hol i temperaturdata.
++                            </text>
++                        }
++
++                        Samla datadekning er
++                        @result.CoveragePercent.ToString("0.0") %.
++                        Periodar under minstekravet er ikkje tekne med
++                        i døgngradtotalen.
++                    </div>
++                }
++
++                @if (result.UsesEstimatedTemperatures)
++                {
++                    <div class="alert alert-info mb-4" role="status">
++
++                        Shelly-historikken inneheld minimums- og
++                        maksimumstemperatur per intervall, men ikkje
++                        alltid eit gjennomsnitt. For slike intervall er
++                        middelverdien av minimum og maksimum brukt som
++                        eit synleg estimat.
++                    </div>
++                }
+ 
+                 <hr class="my-4" />
+ 
+@@ -545,16 +570,24 @@
+                         Temperaturkjelde
+                     </dt>
+ 
+-                    <dd class="col-sm-7 col-lg-8">
+-                        @result.SourceName
++                    <dd class="col-sm-7 col-lg-8">
++                        @result.SourceName
+ 
+                         @if (!usesShelly)
+                         {
+                             <span class="text-body-secondary">
+                                 (@result.SourceId)
+                             </span>
+-                        }
+-                    </dd>
++                        }
++                    </dd>
++
++                    <dt class="col-sm-5 col-lg-4">
++                        Datadekning
++                    </dt>
++
++                    <dd class="col-sm-7 col-lg-8">
++                        @result.CoveragePercent.ToString("0.0") %
++                    </dd>
+ 
+                     @if (result.StationMetresAboveSeaLevel.HasValue)
+                     {
+@@ -636,10 +669,20 @@
+                                             }
+                                         </div>
+ 
+-                                        <small class="text-body-secondary">
+-                                            kl. @period.PeriodStart.ToString("HH:mm")
+-                                            til @period.PeriodEnd.ToString("HH:mm")
+-                                        </small>
++                                        <small class="text-body-secondary">
++                                            kl. @period.PeriodStart.ToString("HH:mm")
++                                            til @period.PeriodEnd.ToString("HH:mm")
++                                        </small>
++
++                                        @if (!period.UsesRefrigeratorTemperature &&
++                                             period.CoveragePercent < 99.999)
++                                        {
++                                            <br />
++                                            <small class="text-warning-emphasis">
++                                                Datadekning:
++                                                @period.CoveragePercent.ToString("0.0") %
++                                            </small>
++                                        }
+                                     </td>
+ 
+                                     <td class="text-end">
+@@ -900,17 +943,22 @@
+                 document.getElementById(
+                     "refrigerator-date-container");
+ 
+-            const refrigeratorDateInput =
+-                document.getElementById(
+-                    "Input_RefrigeratedFromDate");
++            const refrigeratorDateInput =
++                document.getElementById(
++                    "Input_RefrigeratedFromDate");
++
++            const refrigeratorTimeInput =
++                document.getElementById(
++                    "Input_RefrigeratedFromTime");
+ 
+             const hungDateInput =
+                 document.getElementById(
+                     "Input_HungDate");
+ 
+-            if (!refrigeratorCheckbox ||
+-                !refrigeratorContainer ||
+-                !refrigeratorDateInput) {
++            if (!refrigeratorCheckbox ||
++                !refrigeratorContainer ||
++                !refrigeratorDateInput ||
++                !refrigeratorTimeInput) {
+                 return;
+             }
+ 
+@@ -925,14 +973,26 @@
+                 refrigeratorDateInput.disabled =
+                     !isRefrigerated;
+ 
+-                refrigeratorDateInput.required =
+-                    isRefrigerated;
++                refrigeratorDateInput.required =
++                    isRefrigerated;
++
++                refrigeratorTimeInput.disabled =
++                    !isRefrigerated;
++
++                refrigeratorTimeInput.required =
++                    isRefrigerated;
+ 
+-                refrigeratorDateInput.setAttribute(
++                refrigeratorDateInput.setAttribute(
+                     "aria-required",
+                     isRefrigerated
+-                        ? "true"
+-                        : "false");
++                        ? "true"
++                        : "false");
++
++                refrigeratorTimeInput.setAttribute(
++                    "aria-required",
++                    isRefrigerated
++                        ? "true"
++                        : "false");
+ 
+                 /*
+                  * Kjøleskapsdatoen kan ikkje vere før
+diff --git a/VigdalsMorningsguide.csproj b/VigdalsMorningsguide.csproj
+index e035d38f28203f4c0d8850c32c80ff26e692f45d..de9f86ec00f4b263ad8ab78d1d826746789f8784 100644
+--- a/VigdalsMorningsguide.csproj
++++ b/VigdalsMorningsguide.csproj
+@@ -7,4 +7,8 @@
+     <UserSecretsId>fb69e047-c44f-4ff0-b9be-f0834a1d9c8e</UserSecretsId>
+   </PropertyGroup>
+ 
++  <ItemGroup>
++    <Compile Remove="CalculationTests/**/*.cs" />
++  </ItemGroup>
++
+ </Project>
+diff --git a/appsettings.json b/appsettings.json
+index c304753acf6af17b30e1977bd3684c461f04b040..d25ba35099bfcd4d07b56319b5d36fb5d2437af7 100644
+--- a/appsettings.json
++++ b/appsettings.json
+@@ -13,7 +13,6 @@
+     "BaseUrl": "https://frost.met.no/",
+     "MinimumCoveragePercent": 70.0,
+     "MeasurementIntervalMinutes": 10,
+-    "MaximumAcceptedGapMinutes": 90,
+     "MaximumDaysBack": 90
+   },
+ 
+@@ -23,11 +22,10 @@
+   },
+ 
+   "Shelly": {
+-    "DisplayName": "Shelly i skålen i Sogndal",
++    "DisplayName": "Skålen i Sogndal",
+     "CacheSeconds": 30,
+     "StaleAfterMinutes": 30,
+     "MinimumCoveragePercent": 70.0,
+-    "MaximumAcceptedGapMinutes": 180,
+     "MaximumDaysBack": 90
+   }
+ }

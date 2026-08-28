@@ -77,8 +77,8 @@ public sealed class MorningController : Controller
                                 defaultTime),
 
                         SelectedSourceId =
-                            WeatherStationCatalog
-                                .DefaultSourceId,
+                            TemperatureSourceCatalog
+                                .ShellySourceId,
 
                         TargetDegreeDays =
                             80,
@@ -522,6 +522,9 @@ public sealed class MorningController : Controller
             model.Input.RefrigeratedFromDate =
                 null;
 
+            model.Input.RefrigeratedFromTime =
+                null;
+
             return;
         }
 
@@ -531,33 +534,71 @@ public sealed class MorningController : Controller
                 "Input.RefrigeratedFromDate",
                 "Vel datoen kjøtet vart lagt i kjøleskap.");
 
+        }
+
+        if (!model.Input.RefrigeratedFromTime.HasValue)
+        {
+            ModelState.AddModelError(
+                "Input.RefrigeratedFromTime",
+                "Vel klokkeslettet kjøtet vart lagt i kjøleskap.");
+        }
+
+        if (!model.Input.RefrigeratedFromDate.HasValue ||
+            !model.Input.RefrigeratedFromTime.HasValue)
+        {
             return;
         }
 
-        if (model.Input.RefrigeratedFromDate.Value <
-            model.Input.HungDate)
-        {
-            ModelState.AddModelError(
-                "Input.RefrigeratedFromDate",
-                "Kjøleskapsdatoen kan ikkje vere før " +
-                "opphengsdatoen.");
-        }
+        var refrigeratedAt =
+            DateTime.SpecifyKind(
+                model.Input.RefrigeratedFromDate.Value.ToDateTime(
+                    model.Input.RefrigeratedFromTime.Value),
+                DateTimeKind.Unspecified);
+
+        var hungAt =
+            model.Input.GetHungAt();
 
         var nowNorwegian =
             TimeZoneInfo.ConvertTime(
                 DateTimeOffset.UtcNow,
                 NorwegianTimeZone);
 
-        var today =
-            DateOnly.FromDateTime(
-                nowNorwegian.DateTime);
+        var nowLocal =
+            DateTime.SpecifyKind(
+                nowNorwegian.DateTime,
+                DateTimeKind.Unspecified);
 
-        if (model.Input.RefrigeratedFromDate.Value >
-            today)
+        if (refrigeratedAt < hungAt)
         {
             ModelState.AddModelError(
-                "Input.RefrigeratedFromDate",
-                "Kjøleskapsdatoen kan ikkje vere fram i tid.");
+                "Input.RefrigeratedFromTime",
+                "Kjøleskapstidspunktet kan ikkje vere før " +
+                "opphengstidspunktet.");
+        }
+
+        if (refrigeratedAt > nowLocal)
+        {
+            ModelState.AddModelError(
+                "Input.RefrigeratedFromTime",
+                "Kjøleskapstidspunktet kan ikkje vere fram i tid.");
+        }
+
+        if (NorwegianTimeZone.IsInvalidTime(
+                refrigeratedAt))
+        {
+            ModelState.AddModelError(
+                "Input.RefrigeratedFromTime",
+                "Tidspunktet finst ikkje på grunn av overgang " +
+                "til sommartid.");
+        }
+
+        if (NorwegianTimeZone.IsAmbiguousTime(
+                refrigeratedAt))
+        {
+            ModelState.AddModelError(
+                "Input.RefrigeratedFromTime",
+                "Tidspunktet er tvitydig på grunn av overgang " +
+                "frå sommartid. Vel eit anna klokkeslett.");
         }
     }
     private void PopulateTemperatureSourceOptions(

@@ -112,10 +112,6 @@ builder.Services
         "Shelly:MinimumCoveragePercent må vere mellom 0 og 100.")
     .Validate(
         options =>
-            options.MaximumAcceptedGapMinutes > 0,
-        "Shelly:MaximumAcceptedGapMinutes må vere større enn null.")
-    .Validate(
-        options =>
             options.MaximumDaysBack > 0,
         "Shelly:MaximumDaysBack må vere større enn null.")
     .ValidateOnStart();

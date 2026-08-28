@@ -229,7 +229,6 @@ public sealed class FrostService
             refrigeratedAtLocal,
             measurements,
             _options.MeasurementIntervalMinutes,
-            _options.MaximumAcceptedGapMinutes,
             _options.MinimumCoveragePercent,
             _options.MaximumDaysBack,
             nowUtc);
@@ -246,7 +245,9 @@ public sealed class FrostService
                         string.Equals(
                             observation.ElementId,
                             elementId,
-                            StringComparison.Ordinal))
+                            StringComparison.Ordinal) &&
+                        observation.QualityCode
+                            is >= 0 and <= 4)
                     .Select(observation =>
                         new TemperatureMeasurementModel(
                             dataPoint.ReferenceTime.ToUniversalTime(),
@@ -276,7 +277,8 @@ public sealed class FrostService
             $"&elements={Encode(station.ElementId)}" +
             $"&timeoffsets={Encode(station.TimeOffset)}" +
             $"&timeresolutions={Encode(station.TimeResolution)}" +
-            $"&timeseriesids={station.TimeSeriesId}";
+            $"&timeseriesids={station.TimeSeriesId}" +
+            "&qualities=0,1,2,3,4";
 
         if (station.Level.HasValue)
         {
@@ -437,14 +439,6 @@ public sealed class FrostService
             throw new InvalidOperationException(
                 "Frost:MeasurementIntervalMinutes må vere " +
                 "større enn null.");
-        }
-
-        if (_options.MaximumAcceptedGapMinutes <
-            _options.MeasurementIntervalMinutes)
-        {
-            throw new InvalidOperationException(
-                "Frost:MaximumAcceptedGapMinutes kan ikkje vere " +
-                "mindre enn måleintervallet.");
         }
 
         if (_options.MaximumDaysBack <= 0)

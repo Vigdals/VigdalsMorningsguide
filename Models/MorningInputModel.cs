@@ -17,7 +17,7 @@ public sealed class MorningInputModel
     [Display(Name = "Temperaturkjelde")]
     [Required(ErrorMessage = "Du må velje temperaturkjelde.")]
     public string SelectedSourceId { get; set; } =
-        WeatherStationCatalog.DefaultSourceId;
+        TemperatureSourceCatalog.ShellySourceId;
 
     [Display(Name = "Mål for døgngrader")]
     [Range(

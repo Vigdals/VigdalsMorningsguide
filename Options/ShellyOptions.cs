@@ -15,7 +15,7 @@ public sealed class ShellyOptions
         string.Empty;
 
     public string DisplayName { get; init; } =
-        "Shelly i skålen i Sogndal";
+        "Skålen i Sogndal";
 
     public int CacheSeconds { get; init; } =
         30;
@@ -25,9 +25,6 @@ public sealed class ShellyOptions
 
     public double MinimumCoveragePercent { get; init; } =
         70.0;
-
-    public int MaximumAcceptedGapMinutes { get; init; } =
-        180;
 
     public int MaximumDaysBack { get; init; } =
         90;

@@ -98,6 +98,29 @@ dotnet run
 
 Ikkje legg Shelly-nøkkelen i `appsettings.json` eller i Git.
 
+## Utrekningsmodell
+
+- Døgngrader blir integrerte med faktisk tid i UTC, slik at norske
+  sommar- og vintertidsdøgn blir rekna som høvesvis 23 og 25 timar.
+- Temperaturen blir halden i det nominelle måleintervallet. Små avvik i
+  rapporteringstid blir tolererte, men manglande punkt fyller ikkje lange
+  hol i historikken.
+- Periodar med lågare datadekning enn kjelda sitt minstekrav blir viste,
+  men blir ikkje lagde til døgngradtotalen.
+- Etter det registrerte kjøleskapstidspunktet blir fast 4 °C brukt.
+  Dagen blir delt i ein målt periode før tidspunktet og ein
+  kjøleskapsperiode etter tidspunktet.
+- Temperatur under 0 °C gir 0 døgngrader. Den målte
+  gjennomsnittstemperaturen blir likevel vist.
+- Dersom Shelly berre leverer minimum og maksimum for eit intervall,
+  blir middelverdien brukt som eit uttrykkeleg merkt estimat.
+
+Køyr dei frittståande regresjonstestane utan ekstra testpakkar:
+
+```bash
+dotnet run --project CalculationTests/VigdalsMorningsguide.CalculationTests.csproj
+```
+
 ---
 
 # Produksjon

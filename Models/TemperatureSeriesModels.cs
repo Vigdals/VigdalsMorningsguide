@@ -3,7 +3,8 @@ namespace VigdalsMorningsguide.Models;
 public sealed record TemperatureMeasurementModel(
     DateTimeOffset UtcTimestamp,
     double Temperature,
-    int? QualityCode = null);
+    int? QualityCode = null,
+    bool IsEstimated = false);
 
 public sealed class TemperatureSourceModel
 {

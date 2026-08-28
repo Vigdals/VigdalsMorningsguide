@@ -18,7 +18,6 @@ public sealed class DegreeDayCalculationService
         DateTime? refrigeratedAt,
         IReadOnlyList<TemperatureMeasurementModel> measurements,
         int measurementIntervalMinutes,
-        int maximumAcceptedGapMinutes,
         double minimumCoveragePercent,
         int maximumDaysBack,
         DateTimeOffset? calculatedAtUtc = null)
@@ -31,7 +30,6 @@ public sealed class DegreeDayCalculationService
 
         ValidateSettings(
             measurementIntervalMinutes,
-            maximumAcceptedGapMinutes,
             minimumCoveragePercent,
             maximumDaysBack);
 
@@ -108,7 +106,6 @@ public sealed class DegreeDayCalculationService
             source,
             refrigeratedAtLocal,
             measurementIntervalMinutes,
-            maximumAcceptedGapMinutes,
             minimumCoveragePercent);
     }
 
@@ -122,7 +119,6 @@ public sealed class DegreeDayCalculationService
         TemperatureSourceModel source,
         DateTime? refrigeratedAtLocal,
         int measurementIntervalMinutes,
-        int maximumAcceptedGapMinutes,
         double minimumCoveragePercent)
     {
         var dailyResults =
@@ -131,14 +127,17 @@ public sealed class DegreeDayCalculationService
         var accumulatedDegreeDays =
             0.0;
 
-        var includedWeightedTemperatureHours =
+        var observedWeightedTemperatureHours =
             0.0;
 
-        var includedCoveredHours =
+        var observedCoveredHours =
             0.0;
 
         var totalCoveredHours =
             0.0;
+
+        var usesEstimatedTemperatures =
+            false;
 
         var firstDate =
             DateOnly.FromDateTime(
@@ -228,10 +227,13 @@ public sealed class DegreeDayCalculationService
             var outdoorDegreeDays =
                 0.0;
 
-            var outdoorWeightedTemperatureHours =
+            var outdoorObservedWeightedTemperatureHours =
                 0.0;
 
-            var outdoorCoveredHours =
+            var outdoorObservedHours =
+                0.0;
+
+            var outdoorCoveragePercent =
                 0.0;
 
             var outdoorDurationHours =
@@ -268,10 +270,9 @@ public sealed class DegreeDayCalculationService
                         measurements,
                         outdoorStartUtc,
                         outdoorEndUtc,
-                        measurementIntervalMinutes,
-                        maximumAcceptedGapMinutes);
+                        measurementIntervalMinutes);
 
-                var outdoorCoveragePercent =
+                outdoorCoveragePercent =
                     outdoorDurationHours <= 0
                         ? 0
                         : Math.Min(
@@ -288,22 +289,25 @@ public sealed class DegreeDayCalculationService
                 totalCoveredHours +=
                     integration.CoveredHours;
 
+                outdoorObservedWeightedTemperatureHours =
+                    integration.WeightedTemperatureHours;
+
+                outdoorObservedHours =
+                    integration.CoveredHours;
+
+                observedWeightedTemperatureHours +=
+                    integration.WeightedTemperatureHours;
+
+                observedCoveredHours +=
+                    integration.CoveredHours;
+
+                usesEstimatedTemperatures |=
+                    integration.UsesEstimatedTemperature;
+
                 if (outdoorIncluded)
                 {
                     outdoorDegreeDays =
                         integration.DegreeDays;
-
-                    outdoorWeightedTemperatureHours =
-                        integration.WeightedTemperatureHours;
-
-                    outdoorCoveredHours =
-                        integration.CoveredHours;
-
-                    includedWeightedTemperatureHours +=
-                        integration.WeightedTemperatureHours;
-
-                    includedCoveredHours +=
-                        integration.CoveredHours;
                 }
 
                 observationCount =
@@ -364,10 +368,10 @@ public sealed class DegreeDayCalculationService
                     totalCoveredHours +=
                         refrigeratorHours;
 
-                    includedWeightedTemperatureHours +=
+                    observedWeightedTemperatureHours +=
                         refrigeratorWeightedTemperatureHours;
 
-                    includedCoveredHours +=
+                    observedCoveredHours +=
                         refrigeratorHours;
                 }
             }
@@ -395,16 +399,19 @@ public sealed class DegreeDayCalculationService
                             outdoorEndLocal,
 
                         MeanTemperature =
-                            outdoorCoveredHours <= 0
+                            outdoorObservedHours <= 0
                                 ? null
-                                : outdoorWeightedTemperatureHours /
-                                  outdoorCoveredHours,
+                                : outdoorObservedWeightedTemperatureHours /
+                                  outdoorObservedHours,
 
                         IncludedInTotal =
                             outdoorIncluded,
 
                         UsesRefrigeratorTemperature =
                             false,
+
+                        CoveragePercent =
+                            outdoorCoveragePercent,
 
                         DegreeDays =
                             outdoorDegreeDays,
@@ -436,6 +443,9 @@ public sealed class DegreeDayCalculationService
                         UsesRefrigeratorTemperature =
                             true,
 
+                        CoveragePercent =
+                            100,
+
                         DegreeDays =
                             refrigeratorDegreeDays,
 
@@ -450,11 +460,11 @@ public sealed class DegreeDayCalculationService
                 degreeDays;
 
             var dayCoveredHours =
-                outdoorCoveredHours +
+                outdoorObservedHours +
                 refrigeratorHours;
 
             var dayWeightedTemperatureHours =
-                outdoorWeightedTemperatureHours +
+                outdoorObservedWeightedTemperatureHours +
                 refrigeratorWeightedTemperatureHours;
 
             double? meanTemperature =
@@ -469,7 +479,7 @@ public sealed class DegreeDayCalculationService
                     : Math.Min(
                         100,
                         (
-                            outdoorCoveredHours +
+                            outdoorObservedHours +
                             refrigeratorHours
                         ) /
                         segmentDurationHours *
@@ -537,10 +547,10 @@ public sealed class DegreeDayCalculationService
                     100);
 
         double? averageTemperature =
-            includedCoveredHours <= 0
+            observedCoveredHours <= 0
                 ? null
-                : includedWeightedTemperatureHours /
-                  includedCoveredHours;
+                : observedWeightedTemperatureHours /
+                  observedCoveredHours;
 
         var observationCountInPeriod =
             measurements.Count(measurement =>
@@ -551,6 +561,9 @@ public sealed class DegreeDayCalculationService
         {
             HungAt =
                 hungAtLocal,
+
+            HungAtUtc =
+                periodStartUtc,
 
             CalculatedAt =
                 calculatedAtLocal,
@@ -565,6 +578,9 @@ public sealed class DegreeDayCalculationService
                 refrigeratedAtLocal.HasValue
                     ? RefrigeratorTemperatureCelsius
                     : null,
+
+            UsesEstimatedTemperatures =
+                usesEstimatedTemperatures,
 
             SourceId =
                 source.SourceId,
@@ -608,8 +624,7 @@ public sealed class DegreeDayCalculationService
         IReadOnlyList<TemperatureMeasurementModel> measurements,
         DateTimeOffset periodStart,
         DateTimeOffset periodEnd,
-        int measurementIntervalMinutes,
-        int maximumAcceptedGapMinutes)
+        int measurementIntervalMinutes)
     {
         if (measurements.Count == 0 ||
             periodEnd <= periodStart)
@@ -626,6 +641,21 @@ public sealed class DegreeDayCalculationService
         var coveredHours =
             0.0;
 
+        var usesEstimatedTemperature =
+            false;
+
+        var nominalInterval =
+            TimeSpan.FromMinutes(
+                measurementIntervalMinutes);
+
+        var jitterTolerance =
+            TimeSpan.FromMinutes(
+                Math.Min(
+                    60,
+                    Math.Max(
+                        1,
+                        measurementIntervalMinutes * 0.10)));
+
         for (
             var index = 0;
             index < measurements.Count;
@@ -634,20 +664,27 @@ public sealed class DegreeDayCalculationService
             var current =
                 measurements[index];
 
-            var nextTimestamp =
-                index + 1 < measurements.Count
-                    ? measurements[index + 1].UtcTimestamp
-                    : current.UtcTimestamp.AddMinutes(
-                        measurementIntervalMinutes);
+            var nominalEnd =
+                current.UtcTimestamp +
+                nominalInterval;
 
-            var gapMinutes =
-                (nextTimestamp - current.UtcTimestamp)
-                .TotalMinutes;
+            var intervalEndFromData =
+                nominalEnd;
 
-            if (gapMinutes <= 0 ||
-                gapMinutes > maximumAcceptedGapMinutes)
+            if (index + 1 < measurements.Count)
             {
-                continue;
+                var nextTimestamp =
+                    measurements[index + 1].UtcTimestamp;
+
+                var gap =
+                    nextTimestamp - current.UtcTimestamp;
+
+                if (gap > TimeSpan.Zero &&
+                    gap <= nominalInterval + jitterTolerance)
+                {
+                    intervalEndFromData =
+                        nextTimestamp;
+                }
             }
 
             var intervalStart =
@@ -656,8 +693,8 @@ public sealed class DegreeDayCalculationService
                     : periodStart;
 
             var intervalEnd =
-                nextTimestamp < periodEnd
-                    ? nextTimestamp
+                intervalEndFromData < periodEnd
+                    ? intervalEndFromData
                     : periodEnd;
 
             if (intervalEnd <= intervalStart)
@@ -682,12 +719,16 @@ public sealed class DegreeDayCalculationService
 
             coveredHours +=
                 intervalHours;
+
+            usesEstimatedTemperature |=
+                current.IsEstimated;
         }
 
         return new IntegrationResult(
             totalDegreeDays,
             weightedTemperatureHours,
-            coveredHours);
+            coveredHours,
+            usesEstimatedTemperature);
     }
 
     private static int CalculateExpectedObservationCount(
@@ -711,7 +752,6 @@ public sealed class DegreeDayCalculationService
 
     private static void ValidateSettings(
         int measurementIntervalMinutes,
-        int maximumAcceptedGapMinutes,
         double minimumCoveragePercent,
         int maximumDaysBack)
     {
@@ -727,15 +767,6 @@ public sealed class DegreeDayCalculationService
             throw new ArgumentOutOfRangeException(
                 nameof(measurementIntervalMinutes),
                 "Måleintervallet må vere større enn null.");
-        }
-
-        if (maximumAcceptedGapMinutes <
-            measurementIntervalMinutes)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(maximumAcceptedGapMinutes),
-                "Største godtekne målehol kan ikkje vere " +
-                "mindre enn måleintervallet.");
         }
 
         if (maximumDaysBack <= 0)
@@ -935,12 +966,14 @@ public sealed class DegreeDayCalculationService
     private sealed record IntegrationResult(
         double DegreeDays,
         double WeightedTemperatureHours,
-        double CoveredHours)
+        double CoveredHours,
+        bool UsesEstimatedTemperature)
     {
         public static IntegrationResult Empty { get; } =
             new(
                 DegreeDays: 0,
                 WeightedTemperatureHours: 0,
-                CoveredHours: 0);
+                CoveredHours: 0,
+                UsesEstimatedTemperature: false);
     }
 }

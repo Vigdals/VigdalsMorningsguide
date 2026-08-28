@@ -6,9 +6,16 @@ public sealed class MorningResultModel
 
     public DateTime CalculatedAt { get; init; }
 
+    public DateTimeOffset HungAtUtc { get; init; }
+
     public DateTimeOffset CalculatedAtUtc { get; init; }
+
     public DateTime? RefrigeratedAt { get; init; }
+
     public double? RefrigeratorTemperatureCelsius { get; init; }
+
+    public bool UsesEstimatedTemperatures { get; init; }
+
     public string SourceId { get; init; } =
         string.Empty;
 
@@ -37,8 +44,8 @@ public sealed class MorningResultModel
         [];
 
     public TimeSpan ElapsedTime =>
-        CalculatedAt > HungAt
-            ? CalculatedAt - HungAt
+        CalculatedAtUtc > HungAtUtc
+            ? CalculatedAtUtc - HungAtUtc
             : TimeSpan.Zero;
 
     public int ElapsedWholeDays =>
@@ -69,6 +76,7 @@ public sealed class MorningResultModel
 
     public double? EstimatedHoursRemaining =>
         !TargetReached &&
+        ExcludedDayCount == 0 &&
         AverageTemperature is > 0
             ? RemainingDegreeDays /
               AverageTemperature.Value *
@@ -82,6 +90,14 @@ public sealed class MorningResultModel
     public int ExcludedDayCount =>
         Days.Count(day =>
             !day.IncludedInTotal);
+
+    public int IncompleteMeasuredPeriodCount =>
+        Days
+            .SelectMany(day =>
+                day.Periods)
+            .Count(period =>
+                !period.UsesRefrigeratorTemperature &&
+                period.CoveragePercent < 99.999);
 }
 
 public sealed class MorningDayModel
@@ -126,6 +142,8 @@ public sealed class MorningDayPeriodModel
     public bool IncludedInTotal { get; init; }
 
     public bool UsesRefrigeratorTemperature { get; init; }
+
+    public double CoveragePercent { get; init; }
 
     public double DegreeDays { get; init; }
 
