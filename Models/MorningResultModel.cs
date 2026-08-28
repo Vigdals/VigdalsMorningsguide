@@ -110,4 +110,24 @@ public sealed class MorningDayModel
 
     public IReadOnlyList<int> QualityCodes { get; init; } =
         [];
+
+    public IReadOnlyList<MorningDayPeriodModel> Periods { get; init; } =
+        [];
+}
+
+public sealed class MorningDayPeriodModel
+{
+    public DateTime PeriodStart { get; init; }
+
+    public DateTime PeriodEnd { get; init; }
+
+    public double? MeanTemperature { get; init; }
+
+    public bool IncludedInTotal { get; init; }
+
+    public bool UsesRefrigeratorTemperature { get; init; }
+
+    public double DegreeDays { get; init; }
+
+    public double AccumulatedDegreeDays { get; init; }
 }

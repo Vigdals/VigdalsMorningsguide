@@ -376,7 +376,77 @@ public sealed class DegreeDayCalculationService
                 outdoorDegreeDays +
                 refrigeratorDegreeDays;
 
-            accumulatedDegreeDays +=
+            var accumulatedBeforeDay =
+                accumulatedDegreeDays;
+
+            var dayPeriods =
+                new List<MorningDayPeriodModel>(
+                    capacity: 2);
+
+            if (outdoorEndLocal > outdoorStartLocal)
+            {
+                dayPeriods.Add(
+                    new MorningDayPeriodModel
+                    {
+                        PeriodStart =
+                            outdoorStartLocal,
+
+                        PeriodEnd =
+                            outdoorEndLocal,
+
+                        MeanTemperature =
+                            outdoorCoveredHours <= 0
+                                ? null
+                                : outdoorWeightedTemperatureHours /
+                                  outdoorCoveredHours,
+
+                        IncludedInTotal =
+                            outdoorIncluded,
+
+                        UsesRefrigeratorTemperature =
+                            false,
+
+                        DegreeDays =
+                            outdoorDegreeDays,
+
+                        AccumulatedDegreeDays =
+                            accumulatedBeforeDay +
+                            outdoorDegreeDays
+                    });
+            }
+
+            if (refrigeratorStartLocal.HasValue &&
+                refrigeratorHours > 0)
+            {
+                dayPeriods.Add(
+                    new MorningDayPeriodModel
+                    {
+                        PeriodStart =
+                            refrigeratorStartLocal.Value,
+
+                        PeriodEnd =
+                            segmentEndLocal,
+
+                        MeanTemperature =
+                            RefrigeratorTemperatureCelsius,
+
+                        IncludedInTotal =
+                            true,
+
+                        UsesRefrigeratorTemperature =
+                            true,
+
+                        DegreeDays =
+                            refrigeratorDegreeDays,
+
+                        AccumulatedDegreeDays =
+                            accumulatedBeforeDay +
+                            degreeDays
+                    });
+            }
+
+            accumulatedDegreeDays =
+                accumulatedBeforeDay +
                 degreeDays;
 
             var dayCoveredHours =
@@ -446,7 +516,10 @@ public sealed class DegreeDayCalculationService
                         accumulatedDegreeDays,
 
                     QualityCodes =
-                        qualityCodes
+                        qualityCodes,
+
+                    Periods =
+                        dayPeriods
                 });
         }
 

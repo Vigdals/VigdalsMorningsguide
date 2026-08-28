@@ -580,7 +580,7 @@
                 </h2>
 
                 <p class="text-body-secondary mb-0">
-                    Temperatur og opptente døgngrader per dag.
+                    Temperatur og opptente døgngrader per periode.
                 </p>
             </div>
 
@@ -588,7 +588,7 @@
                 <table class="table table-hover day-table mb-0">
 
                     <caption class="visually-hidden">
-                        Døgnverdiar for temperatur og opptente døgngrader.
+                        Temperatur og opptente døgngrader per periode.
                     </caption>
 
                     <thead class="table-light">
@@ -614,47 +614,56 @@
                     <tbody>
                         @foreach (var day in result.Days)
                         {
-                            <tr>
-                                <td class="ps-4">
+                            foreach (var period in day.Periods)
+                            {
+                                <tr>
+                                    <td class="ps-4">
 
-                                    <div class="fw-semibold">
-                                        @day.Date.ToString("dd.MM.yyyy")
+                                        <div class="fw-semibold">
+                                            @day.Date.ToString("dd.MM.yyyy")
 
-                                        @if (day.UsesRefrigeratorTemperature)
+                                            @if (period.UsesRefrigeratorTemperature)
+                                            {
+                                                <span class="badge text-bg-secondary ms-1">
+                                                    Kjøleskap
+                                                </span>
+                                            }
+                                            else if (day.Periods.Count > 1)
+                                            {
+                                                <span class="badge text-bg-success ms-1">
+                                                    Målt temperatur
+                                                </span>
+                                            }
+                                        </div>
+
+                                        <small class="text-body-secondary">
+                                            kl. @period.PeriodStart.ToString("HH:mm")
+                                            til @period.PeriodEnd.ToString("HH:mm")
+                                        </small>
+                                    </td>
+
+                                    <td class="text-end">
+                                        @if (period.MeanTemperature.HasValue)
                                         {
-                                            <span class="badge text-bg-secondary ms-1">
-                                                Kjøleskap
+                                            @($"{period.MeanTemperature.Value:0.0} °C")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-body-secondary">
+                                                –
                                             </span>
                                         }
-                                    </div>
+                                    </td>
 
-                                    <small class="text-body-secondary">
-                                        kl. @day.PeriodStart.ToString("HH:mm")
-                                        til @day.PeriodEnd.ToString("HH:mm")
-                                    </small>
-                                </td>
+                                    <td class="text-end fw-semibold">
+                                        @period.DegreeDays.ToString("0.00")
+                                    </td>
 
-                                <td class="text-end">
-                                    @if (day.MeanTemperature.HasValue)
-                                    {
-                                        @($"{day.MeanTemperature.Value:0.0} °C")
-                                    }
-                                    else
-                                    {
-                                        <span class="text-body-secondary">
-                                            –
-                                        </span>
-                                    }
-                                </td>
-
-                                <td class="text-end fw-semibold">
-                                    @day.DegreeDays.ToString("0.00")
-                                </td>
-
-                                <td class="text-end fw-semibold pe-4">
-                                    @day.AccumulatedDegreeDays.ToString("0.00")
-                                </td>
-                            </tr>
+                                    <td class="text-end fw-semibold pe-4">
+                                        @period.AccumulatedDegreeDays.ToString("0.00")
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
 
