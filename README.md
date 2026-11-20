@@ -16,6 +16,9 @@ Pi](https://img.shields.io/badge/Raspberry_Pi-Hosted-C51A4A)
 - 🦌 Reknar ut døgngrader for optimal mørning
 - Hentar historiske temperaturar frå Frost API
 - Brukar historiske temperaturar frå Shelly som valbar lokal målar
+- Raudt frostvarsel ved fersk Shelly-måling under 0 °C eller minusgrader
+  i MET-prognosen for Loftesnes dei neste 48 timane (30 minutt prognosecache).
+  MET-data gjeld utandørs i nærområdet, ikkje temperaturen inne i skålen.
 - 🐳 Docker-basert drift
 - HTTPS med Let's Encrypt
 - Automatisk deploy frå GitHub
