@@ -24,7 +24,10 @@ var tests = new (string Name, Action Run)[]
     ("Kjøleskap 4 C gir 4 DG per døgn", RefrigeratorSourceDefault),
     ("Kjøleskap brukar endra temperatur", RefrigeratorSourceCustom),
     ("Ugyldig kjøleskapstemperatur blir stoppa", RefrigeratorSourceInvalid),
-    ("Kjeldekatalog kjenner kjøleskap", RefrigeratorSourceCatalog)
+    ("Kjeldekatalog kjenner kjøleskap", RefrigeratorSourceCatalog),
+    ("Kjende kjelder blir logga med kanonisk ID", KnownSourceIdsForLogging),
+    ("Ukjent kjelde får trygg loggverdi", UnknownSourceIdsForLogging),
+    ("Injisert linjeskift blir ikkje logga", InjectionSourceIdForLogging)
 };
 
 var failures = new List<string>();
@@ -53,6 +56,68 @@ if (failures.Count > 0)
 }
 
 return;
+
+static void KnownSourceIdsForLogging()
+{
+    var sourceIds = new[]
+    {
+        TemperatureSourceCatalog.ShellySourceId,
+        TemperatureSourceCatalog.RefrigeratorSourceId
+    };
+
+    foreach (var id in sourceIds)
+    {
+        Equal(id, TemperatureSourceCatalog.GetSafeSourceIdForLogging(id));
+        Equal(id, TemperatureSourceCatalog.GetSafeSourceIdForLogging(
+            id.ToLowerInvariant()));
+    }
+
+    foreach (var station in WeatherStationCatalog.Stations)
+    {
+        Equal(station.SourceId,
+            TemperatureSourceCatalog.GetSafeSourceIdForLogging(
+                station.SourceId));
+        Equal(station.SourceId,
+            TemperatureSourceCatalog.GetSafeSourceIdForLogging(
+                station.SourceId.ToLowerInvariant()));
+    }
+}
+
+static void UnknownSourceIdsForLogging()
+{
+    foreach (var input in new string?[]
+    {
+        null,
+        string.Empty,
+        "UNKNOWN",
+        "SN00000",
+        "  SN55709  ",
+        new string('X', 10000)
+    })
+    {
+        Equal("UNKNOWN",
+            TemperatureSourceCatalog.GetSafeSourceIdForLogging(input));
+    }
+}
+
+static void InjectionSourceIdForLogging()
+{
+    var inputs = new[]
+    {
+        "SN55709\r\n[CRITICAL] Falsk loggoppføring",
+        "SHELLY_LOCAL\n[ERROR] fake entry",
+        "REFRIGERATOR\rInjected",
+        "SN55709\tInjected",
+        "SN55709\u2028Injected"
+    };
+
+    foreach (var input in inputs)
+    {
+        var safe = TemperatureSourceCatalog.GetSafeSourceIdForLogging(input);
+        Equal("UNKNOWN", safe);
+        True(!safe.Contains('\r') && !safe.Contains('\n'));
+    }
+}
 
 static void FreshShellyFrost()
 {

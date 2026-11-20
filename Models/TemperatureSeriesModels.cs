@@ -28,6 +28,26 @@ public static class TemperatureSourceCatalog
 
     public const string RefrigeratorSourceId = "REFRIGERATOR";
 
+    /// <summary>
+    /// Returnerer berre ein ID frå kjende, kontrollerte kjelder.
+    /// Ukjend brukarinput skal aldri skrivast direkte til loggen.
+    /// </summary>
+    public static string GetSafeSourceIdForLogging(string? sourceId)
+    {
+        if (IsShelly(sourceId))
+        {
+            return ShellySourceId;
+        }
+
+        if (IsRefrigerator(sourceId))
+        {
+            return RefrigeratorSourceId;
+        }
+
+        return WeatherStationCatalog.Find(sourceId)?.SourceId
+            ?? "UNKNOWN";
+    }
+
     public static bool IsRefrigerator(string? sourceId)
     {
         return string.Equals(
