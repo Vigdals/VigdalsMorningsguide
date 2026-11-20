@@ -292,13 +292,13 @@ public sealed class MorningController : Controller
                  * kjøleskapstemperaturen.
                  */
                 if (model.Result.RefrigeratorTemperatureCelsius
-                    is double refrigeratorTemperature)
+                    is double forecastRefrigeratorTemperature)
                 {
                     model.Forecast =
                         _morningForecastService
                             .CalculateAtConstantTemperature(
                                 model.Result,
-                                refrigeratorTemperature);
+                                forecastRefrigeratorTemperature);
                 }
                 else if (usesShelly)
                 {
