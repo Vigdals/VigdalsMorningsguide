@@ -17,8 +17,14 @@ Pi](https://img.shields.io/badge/Raspberry_Pi-Hosted-C51A4A)
 - Hentar historiske temperaturar frå Frost API
 - Brukar historiske temperaturar frå Shelly som valbar lokal målar
 - Raudt frostvarsel ved fersk Shelly-måling under 0 °C eller minusgrader
-  i MET-prognosen for Loftesnes dei neste 48 timane (30 minutt prognosecache).
-  MET-data gjeld utandørs i nærområdet, ikkje temperaturen inne i skålen.
+  i MET-prognosen dei neste 48 timane (30 minutt prognosecache).
+  Når ein vel ein målestasjon, blir prognosen henta for koordinatane til
+  den valde stasjonen. Ved Shelly blir Loftesnes brukt som utandørsindikasjon,
+  ikkje som ei måling inne i skålen.
+- Eiga kjelde «Kjøleskap» reknar heile perioden ved standard 4 °C, eller
+  ein annan temperatur mellom 0 og 15 °C (strengt større enn 0).
+  Det eksisterande valet «Lagt i kjøleskap» for overgang frå utandørs
+  mørning blir verande og brukar framleis fast 4 °C.
 - 🐳 Docker-basert drift
 - HTTPS med Let's Encrypt
 - Automatisk deploy frå GitHub
