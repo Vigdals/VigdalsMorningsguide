@@ -216,6 +216,7 @@ builder.Services.AddHttpClient<ShellyService>(
 builder.Services.AddHttpClient<ShellyHistoryService>(
     ConfigureShellyHistoryClient);
 
+builder.Services.AddTransient<FrostWarningService>();
 builder.Services.AddSingleton<MorningForecastService>();
 builder.Services.AddSingleton<DegreeDayCalculationService>();
 
