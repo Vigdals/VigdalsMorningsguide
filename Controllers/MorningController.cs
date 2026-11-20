@@ -738,7 +738,7 @@ public sealed class MorningController : Controller
         string? sourceId,
         CancellationToken cancellationToken)
     {
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers["Cache-Control"] = "no-store";
 
         if (!TemperatureSourceCatalog.IsShelly(sourceId) &&
             !TemperatureSourceCatalog.IsRefrigerator(sourceId) &&
