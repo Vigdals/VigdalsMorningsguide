@@ -198,6 +198,10 @@ public sealed class MorningController : Controller
             var refrigeratedAt =
                 model.Input.GetRefrigeratedAt();
 
+            // Servervaliderte verdi blir nytta av alle temperaturkjeldene.
+            var refrigeratorTemperature =
+                model.Input.RefrigeratorTemperatureCelsius ?? 4.0;
+
             WeatherStationModel? station =
                 null;
 
@@ -222,7 +226,7 @@ public sealed class MorningController : Controller
                     minimumCoveragePercent: 100,
                     maximumDaysBack: _frostOptions.MaximumDaysBack,
                     refrigeratorTemperatureCelsius:
-                        model.Input.RefrigeratorTemperatureCelsius!.Value);
+                        refrigeratorTemperature);
             }
             else if (usesShelly)
             {
@@ -231,7 +235,8 @@ public sealed class MorningController : Controller
                         hungAt,
                         model.Input.TargetDegreeDays,
                         refrigeratedAt,
-                        cancellationToken);
+                        cancellationToken,
+                        refrigeratorTemperature);
             }
             else
             {
@@ -272,7 +277,8 @@ public sealed class MorningController : Controller
                         model.Input.TargetDegreeDays,
                         station,
                         refrigeratedAt,
-                        cancellationToken);
+                        cancellationToken,
+                        refrigeratorTemperature);
             }
 
             if (!model.Result.TargetReached)
