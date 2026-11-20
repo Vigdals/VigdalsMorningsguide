@@ -4,7 +4,7 @@ namespace VigdalsMorningsguide.Services;
 
 public sealed class DegreeDayCalculationService
 {
-    private const double RefrigeratorTemperatureCelsius =
+    private const double DefaultRefrigeratorTemperatureCelsius =
         4.0;
 
     private static readonly TimeZoneInfo NorwegianTimeZone =
@@ -20,7 +20,8 @@ public sealed class DegreeDayCalculationService
         int measurementIntervalMinutes,
         double minimumCoveragePercent,
         int maximumDaysBack,
-        DateTimeOffset? calculatedAtUtc = null)
+        DateTimeOffset? calculatedAtUtc = null,
+        double refrigeratorTemperatureCelsius = DefaultRefrigeratorTemperatureCelsius)
     {
         ArgumentNullException.ThrowIfNull(
             source);
@@ -35,6 +36,16 @@ public sealed class DegreeDayCalculationService
 
         ValidateSource(
             source);
+
+        if (refrigeratedAt.HasValue &&
+            (!double.IsFinite(refrigeratorTemperatureCelsius) ||
+             refrigeratorTemperatureCelsius <= 0 ||
+             refrigeratorTemperatureCelsius > 15))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(refrigeratorTemperatureCelsius),
+                "Kjøleskapstemperaturen må vere over 0 og høgst 15 °C.");
+        }
 
         var nowUtc =
             (calculatedAtUtc ?? DateTimeOffset.UtcNow)
@@ -106,7 +117,8 @@ public sealed class DegreeDayCalculationService
             source,
             refrigeratedAtLocal,
             measurementIntervalMinutes,
-            minimumCoveragePercent);
+            minimumCoveragePercent,
+            refrigeratorTemperatureCelsius);
     }
 
     private static MorningResultModel BuildResult(
@@ -119,7 +131,8 @@ public sealed class DegreeDayCalculationService
         TemperatureSourceModel source,
         DateTime? refrigeratedAtLocal,
         int measurementIntervalMinutes,
-        double minimumCoveragePercent)
+        double minimumCoveragePercent,
+        double refrigeratorTemperatureCelsius)
     {
         var dailyResults =
             new List<MorningDayModel>();
@@ -357,12 +370,12 @@ public sealed class DegreeDayCalculationService
                 if (refrigeratorHours > 0)
                 {
                     refrigeratorDegreeDays =
-                        RefrigeratorTemperatureCelsius *
+                        refrigeratorTemperatureCelsius *
                         refrigeratorHours /
                         24.0;
 
                     refrigeratorWeightedTemperatureHours =
-                        RefrigeratorTemperatureCelsius *
+                        refrigeratorTemperatureCelsius *
                         refrigeratorHours;
 
                     totalCoveredHours +=
@@ -435,7 +448,7 @@ public sealed class DegreeDayCalculationService
                             segmentEndLocal,
 
                         MeanTemperature =
-                            RefrigeratorTemperatureCelsius,
+                            refrigeratorTemperatureCelsius,
 
                         IncludedInTotal =
                             true,
@@ -576,7 +589,7 @@ public sealed class DegreeDayCalculationService
 
             RefrigeratorTemperatureCelsius =
                 refrigeratedAtLocal.HasValue
-                    ? RefrigeratorTemperatureCelsius
+                    ? refrigeratorTemperatureCelsius
                     : null,
 
             UsesEstimatedTemperatures =
