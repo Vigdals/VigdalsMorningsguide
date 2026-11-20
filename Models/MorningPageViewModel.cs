@@ -18,6 +18,9 @@ public sealed class MorningPageViewModel
     public ShellyMeasurementModel? ShellyMeasurement { get; set; }
 
     [BindNever]
+    public FrostWarningModel? FrostWarning { get; set; }
+
+    [BindNever]
     public string? ShellyStatusMessage { get; set; }
 
     [BindNever]

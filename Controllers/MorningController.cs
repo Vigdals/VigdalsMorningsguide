@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using VigdalsMorningsguide.Options;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Text.Json;
 using VigdalsMorningsguide.Models;
@@ -17,6 +19,9 @@ public sealed class MorningController : Controller
     private readonly MorningForecastService _morningForecastService;
     private readonly ShellyService _shellyService;
     private readonly ShellyHistoryService _shellyHistoryService;
+    private readonly FrostWarningService _frostWarningService;
+    private readonly DegreeDayCalculationService _degreeDayCalculationService;
+    private readonly FrostOptions _frostOptions;
     private readonly ILogger<MorningController> _logger;
 
     public MorningController(
@@ -26,6 +31,9 @@ public sealed class MorningController : Controller
         MorningForecastService morningForecastService,
         ShellyService shellyService,
         ShellyHistoryService shellyHistoryService,
+        FrostWarningService frostWarningService,
+        DegreeDayCalculationService degreeDayCalculationService,
+        IOptions<FrostOptions> frostOptions,
         ILogger<MorningController> logger)
     {
         _frostService =
@@ -45,6 +53,12 @@ public sealed class MorningController : Controller
 
         _shellyHistoryService =
             shellyHistoryService;
+
+        _frostWarningService =
+            frostWarningService;
+
+        _degreeDayCalculationService = degreeDayCalculationService;
+        _frostOptions = frostOptions.Value;
 
         _logger =
             logger;
@@ -96,9 +110,16 @@ public sealed class MorningController : Controller
 
         try
         {
-            await PopulateShellyMeasurementAsync(
-                model,
-                cancellationToken);
+            if (TemperatureSourceCatalog.IsShelly(model.Input.SelectedSourceId))
+            {
+                await PopulateShellyMeasurementAsync(model, cancellationToken);
+            }
+
+            model.FrostWarning =
+                await _frostWarningService.GetWarningAsync(
+                    model.Input.SelectedSourceId,
+                    model.ShellyMeasurement,
+                    cancellationToken);
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
@@ -129,9 +150,16 @@ public sealed class MorningController : Controller
              * Shelly-status framleis kan visast dersom skjemaet
              * inneheld ugyldige verdiar.
              */
-            await PopulateShellyMeasurementAsync(
-                model,
-                cancellationToken);
+            if (TemperatureSourceCatalog.IsShelly(model.Input.SelectedSourceId))
+            {
+                await PopulateShellyMeasurementAsync(model, cancellationToken);
+            }
+
+            model.FrostWarning =
+                await _frostWarningService.GetWarningAsync(
+                    model.Input.SelectedSourceId,
+                    model.ShellyMeasurement,
+                    cancellationToken);
 
             /*
              * Kjøleskapsdatoen er berre obligatorisk dersom
@@ -142,6 +170,21 @@ public sealed class MorningController : Controller
              */
             ValidateRefrigerationInput(
                 model);
+
+            var isRefrigerator = TemperatureSourceCatalog.IsRefrigerator(
+                model.Input.SelectedSourceId);
+
+            if (isRefrigerator || model.Input.HasBeenRefrigerated)
+            {
+                var temperature = model.Input.RefrigeratorTemperatureCelsius;
+                if (temperature is null || !double.IsFinite(temperature.Value) ||
+                    temperature <= 0 || temperature > 15)
+                {
+                    ModelState.AddModelError(
+                        "Input.RefrigeratorTemperatureCelsius",
+                        "Temperaturen må vere over 0 og høgst 15 °C.");
+                }
+            }
 
             if (!ModelState.IsValid)
             {
@@ -162,7 +205,26 @@ public sealed class MorningController : Controller
                 TemperatureSourceCatalog.IsShelly(
                     model.Input.SelectedSourceId);
 
-            if (usesShelly)
+            if (isRefrigerator)
+            {
+                // Heile perioden i kjøleskap. Ingen eksterne temperaturkall.
+                model.Result = _degreeDayCalculationService.Calculate(
+                    hungAt,
+                    model.Input.TargetDegreeDays,
+                    new TemperatureSourceModel
+                    {
+                        SourceId = TemperatureSourceCatalog.RefrigeratorSourceId,
+                        Name = "Kjøleskap",
+                    },
+                    hungAt,
+                    [],
+                    measurementIntervalMinutes: 10,
+                    minimumCoveragePercent: 100,
+                    maximumDaysBack: _frostOptions.MaximumDaysBack,
+                    refrigeratorTemperatureCelsius:
+                        model.Input.RefrigeratorTemperatureCelsius!.Value);
+            }
+            else if (usesShelly)
             {
                 model.Result =
                     await _shellyHistoryService.CalculateAsync(
@@ -512,6 +574,17 @@ public sealed class MorningController : Controller
     private void ValidateRefrigerationInput(
         MorningPageViewModel model)
     {
+        // Eiga kjøleskapkjelde dekkjer heile perioden og treng ikkje overgangsdato.
+        if (TemperatureSourceCatalog.IsRefrigerator(model.Input.SelectedSourceId))
+        {
+            model.Input.HasBeenRefrigerated = false;
+            model.Input.RefrigeratedFromDate = null;
+            model.Input.RefrigeratedFromTime = null;
+            ModelState.Remove("Input.RefrigeratedFromDate");
+            ModelState.Remove("Input.RefrigeratedFromTime");
+            return;
+        }
+
         /*
          * Dersom brukaren ikkje har kryssa av for kjøleskap,
          * skal ein eventuell gammal verdi frå skjemaet ikkje
@@ -647,11 +720,55 @@ public sealed class MorningController : Controller
                     localGroup
             });
 
+        stationOptions.Insert(
+            1,
+            new SelectListItem
+            {
+                Value = TemperatureSourceCatalog.RefrigeratorSourceId,
+                Text = "Kjøleskap (vel temperatur)",
+                Group = localGroup
+            });
+
         model.TemperatureSourceOptions =
             stationOptions;
     }
 
-    [HttpGet] 
+    [HttpGet]
+    public async Task<IActionResult> FrostWarning(
+        string? sourceId,
+        CancellationToken cancellationToken)
+    {
+        Response.Headers["Cache-Control"] = "no-store";
+
+        if (!TemperatureSourceCatalog.IsShelly(sourceId) &&
+            !TemperatureSourceCatalog.IsRefrigerator(sourceId) &&
+            WeatherStationCatalog.Find(sourceId) is null)
+        {
+            return BadRequest();
+        }
+
+        ShellyMeasurementModel? measurement = null;
+
+        if (TemperatureSourceCatalog.IsShelly(sourceId))
+        {
+            try
+            {
+                measurement = await _shellyService.GetCurrentMeasurementAsync(
+                    cancellationToken);
+            }
+            catch (HttpRequestException) { }
+            catch (JsonException) { }
+            catch (OperationCanceledException)
+                when (!cancellationToken.IsCancellationRequested) { }
+        }
+
+        var warning = await _frostWarningService.GetWarningAsync(
+            sourceId, measurement, cancellationToken);
+
+        return PartialView("_FrostWarning", warning);
+    }
+
+    [HttpGet]
     public IActionResult Guide()
     {
         return View();

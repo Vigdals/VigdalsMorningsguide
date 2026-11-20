@@ -31,6 +31,10 @@
         </div>
     </header>
 
+    <div id="frost-warning-container" aria-live="polite" aria-atomic="true">
+        <partial name="_FrostWarning" model="Model.FrostWarning" />
+    </div>
+
     <section class="card guide-card mb-4" aria-labelledby="input-heading">
 
         <div class="guide-card-header">
@@ -57,6 +61,23 @@
 
                         <span asp-validation-for="Input.SelectedSourceId" class="text-danger small">
                         </span>
+                    </div>
+
+                    <div id="refrigerator-source-temperature"
+                         class="col-12 @(TemperatureSourceCatalog.IsRefrigerator(Model.Input.SelectedSourceId) ? string.Empty : "d-none")">
+                        <label asp-for="Input.RefrigeratorTemperatureCelsius"
+                               class="form-label fw-semibold"></label>
+                        <div class="input-group input-group-lg" style="max-width: 220px">
+                            <input asp-for="Input.RefrigeratorTemperatureCelsius"
+                                   type="number" min="0.1" max="15" step="0.1"
+                                   class="form-control" inputmode="decimal" />
+                            <span class="input-group-text">°C</span>
+                        </div>
+                        <span asp-validation-for="Input.RefrigeratorTemperatureCelsius"
+                              class="text-danger small"></span>
+                        <div class="form-text">
+                            Standard er 4 °C. Bruk den faktiske temperaturen i kjøleskapet.
+                        </div>
                     </div>
 
                     <div class="col-md-6 col-lg-3">
@@ -106,7 +127,8 @@
                         </div>
                     </div>
 
-                    <div class="col-12">
+                    <div id="refrigerator-transition-switch"
+                         class="col-12 @(TemperatureSourceCatalog.IsRefrigerator(Model.Input.SelectedSourceId) ? "d-none" : string.Empty)">
                         <div class="border rounded-3 p-3 bg-body-tertiary">
 
                             <div class="form-check form-switch mb-1">
@@ -518,7 +540,7 @@
                     <dd class="col-sm-7 col-lg-8">
                         @result.SourceName
 
-                        @if (!usesShelly)
+                        @if (!usesShelly && !TemperatureSourceCatalog.IsRefrigerator(Model.Input.SelectedSourceId))
                         {
                             <span class="text-body-secondary">
                                 (@result.SourceId)
@@ -902,6 +924,20 @@
                 document.getElementById(
                     "Input_HungDate");
 
+            const sourceSelect =
+                document.getElementById("Input_SelectedSourceId");
+            const refrigeratorSourceTemperature =
+                document.getElementById("refrigerator-source-temperature");
+            const refrigeratorTemperatureInput =
+                document.getElementById("Input_RefrigeratorTemperatureCelsius");
+            const refrigeratorTransitionSwitch =
+                document.getElementById("refrigerator-transition-switch");
+            const frostContainer =
+                document.getElementById("frost-warning-container");
+            const refrigeratorSourceId = "REFRIGERATOR";
+            const frostEndpoint = '@Url.Action("FrostWarning", "Morning")';
+            let forecastRequest;
+
             if (!refrigeratorCheckbox ||
                 !refrigeratorContainer ||
                 !refrigeratorDateInput ||
@@ -910,8 +946,17 @@
             }
 
             const updateRefrigeratorFields = () => {
+                const isSourceRefrigerator =
+                    sourceSelect?.value === refrigeratorSourceId;
+                refrigeratorSourceTemperature?.classList.toggle(
+                    "d-none", !isSourceRefrigerator);
+                refrigeratorTemperatureInput.disabled = !isSourceRefrigerator;
+                refrigeratorTemperatureInput.required = isSourceRefrigerator;
+                refrigeratorTransitionSwitch?.classList.toggle(
+                    "d-none", isSourceRefrigerator);
+
                 const isRefrigerated =
-                    refrigeratorCheckbox.checked;
+                    !isSourceRefrigerator && refrigeratorCheckbox.checked;
 
                 refrigeratorContainer.classList.toggle(
                     "d-none",
@@ -972,6 +1017,40 @@
             refrigeratorCheckbox.addEventListener(
                 "change",
                 updateRefrigeratorFields);
+
+            sourceSelect?.addEventListener("change", async () => {
+                updateRefrigeratorFields();
+                if (!frostContainer) return;
+
+                forecastRequest?.abort();
+                forecastRequest = new AbortController();
+                const requestSignal = forecastRequest.signal;
+                frostContainer.replaceChildren();
+
+                try {
+                    const params = new URLSearchParams({
+                        sourceId: sourceSelect.value
+                    });
+                    const response = await fetch(
+                        frostEndpoint + "?" + params,
+                        { signal: requestSignal, cache: "no-store" });
+                    if (!response.ok) throw new Error("Forecast request failed");
+                    const html = await response.text();
+                    if (!requestSignal.aborted) {
+                        // Berre servergenerert HTML frå vår eigen MVC-action.
+                        frostContainer.innerHTML = html;
+                    }
+                } catch (error) {
+                    if (!requestSignal.aborted) {
+                        const message = document.createElement("p");
+                        message.className = "alert alert-warning mb-4";
+                        message.setAttribute("role", "status");
+                        message.textContent =
+                            "Klarte ikkje å oppdatere frostvarselet no.";
+                        frostContainer.replaceChildren(message);
+                    }
+                }
+            });
 
             hungDateInput?.addEventListener(
                 "change",

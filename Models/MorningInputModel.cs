@@ -19,6 +19,9 @@ public sealed class MorningInputModel
     public string SelectedSourceId { get; set; } =
         TemperatureSourceCatalog.ShellySourceId;
 
+    [Display(Name = "Temperatur i kjøleskap (°C)")]
+    public double? RefrigeratorTemperatureCelsius { get; set; } = 4.0;
+
     [Display(Name = "Mål for døgngrader")]
     [Range(
         1,

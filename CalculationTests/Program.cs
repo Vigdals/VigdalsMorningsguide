@@ -15,7 +15,16 @@ var tests = new (string Name, Action Run)[]
     ("Dagleg måleintervall toler 25-timarsdøgn", DailyMeasurementAcrossDst),
     ("Midnatt lagar periodar utan overlapp", MidnightBoundary),
     ("Estimerte Shelly-temperaturar blir merkte", EstimatedTemperature),
-    ("Shelly krev to endepunkt for estimert middel", ShellyMeanTemperature)
+    ("Shelly krev to endepunkt for estimert middel", ShellyMeanTemperature),
+    ("Fersk Shelly-måling under null varslar", FreshShellyFrost),
+    ("Gammal Shelly-måling varslar ikkje", StaleShellyNoFrost),
+    ("MET-prognose innan 48 timar varslar", ForecastFrost),
+    ("Prognose utanfor 48 timar varslar ikkje", ForecastOutsideHorizon),
+    ("Null grader varslar ikkje", NoFalseFrostWarning),
+    ("Kjøleskap 4 C gir 4 DG per døgn", RefrigeratorSourceDefault),
+    ("Kjøleskap brukar endra temperatur", RefrigeratorSourceCustom),
+    ("Ugyldig kjøleskapstemperatur blir stoppa", RefrigeratorSourceInvalid),
+    ("Kjeldekatalog kjenner kjøleskap", RefrigeratorSourceCatalog)
 };
 
 var failures = new List<string>();
@@ -44,6 +53,143 @@ if (failures.Count > 0)
 }
 
 return;
+
+static void FreshShellyFrost()
+{
+    var now = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+    var warning = FrostWarningService.Evaluate(
+        new ShellyMeasurementModel
+        {
+            TemperatureCelsius = -1.5,
+            MeasuredAt = now.AddMinutes(-5),
+            StaleAfterMinutes = 30
+        },
+        [],
+        now);
+    True(warning is not null);
+    Near(-1.5, warning!.CurrentTemperatureCelsius!.Value);
+    True(warning.FirstForecastBelowZeroAtUtc is null);
+}
+
+static void StaleShellyNoFrost()
+{
+    var now = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+    var warning = FrostWarningService.Evaluate(
+        new ShellyMeasurementModel
+        {
+            TemperatureCelsius = -3,
+            MeasuredAt = now.AddMinutes(-31),
+            StaleAfterMinutes = 30
+        },
+        [],
+        now);
+    True(warning is null);
+}
+
+static void ForecastFrost()
+{
+    var now = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+    var first = now.AddHours(4);
+    var warning = FrostWarningService.Evaluate(
+        null,
+        [
+            new ForecastTemperaturePoint { Time = now.AddHours(2), Temperature = 1 },
+            new ForecastTemperaturePoint { Time = first, Temperature = -0.5 },
+            new ForecastTemperaturePoint { Time = now.AddHours(5), Temperature = -2 }
+        ],
+        now);
+    True(warning is not null);
+    True(warning!.FirstForecastBelowZeroAtUtc == first);
+    Near(-2, warning.MinimumForecastTemperatureCelsius!.Value);
+    True(warning.CurrentTemperatureCelsius is null);
+}
+
+static void ForecastOutsideHorizon()
+{
+    var now = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+    var warning = FrostWarningService.Evaluate(
+        null,
+        [
+            new ForecastTemperaturePoint { Time = now.AddMinutes(-1), Temperature = -1 },
+            new ForecastTemperaturePoint { Time = now.AddHours(49), Temperature = -4 }
+        ],
+        now);
+    True(warning is null);
+}
+
+static void NoFalseFrostWarning()
+{
+    var now = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+    var warning = FrostWarningService.Evaluate(
+        new ShellyMeasurementModel
+        {
+            TemperatureCelsius = 0,
+            MeasuredAt = now,
+            StaleAfterMinutes = 30
+        },
+        [
+            new ForecastTemperaturePoint { Time = now.AddHours(1), Temperature = 0 },
+            new ForecastTemperaturePoint { Time = now.AddHours(2), Temperature = double.NaN }
+        ],
+        now);
+    True(warning is null);
+}
+
+static void RefrigeratorSourceDefault()
+{
+    var start = Local(2026, 11, 18, 10);
+    var end = Local(2026, 11, 19, 10);
+    var result = Calculate(
+        start, end,
+        refrigeratedAt: start,
+        measurements: []);
+    Near(4, result.TotalDegreeDays);
+    Near(4, result.RefrigeratorTemperatureCelsius!.Value);
+    Near(100, result.CoveragePercent);
+}
+
+static void RefrigeratorSourceCustom()
+{
+    var start = Local(2026, 11, 18, 10);
+    var end = Local(2026, 11, 19, 10);
+    var result = Calculate(
+        start, end,
+        refrigeratedAt: start,
+        measurements: [],
+        refrigeratorTemperatureCelsius: 6.5);
+    Near(6.5, result.TotalDegreeDays);
+    Near(6.5, result.AverageTemperature!.Value);
+    Near(6.5, result.RefrigeratorTemperatureCelsius!.Value);
+}
+
+static void RefrigeratorSourceInvalid()
+{
+    var start = Local(2026, 11, 18, 10);
+    var end = Local(2026, 11, 19, 10);
+    foreach (var value in new[] { 0.0, -1.0, 15.1, double.NaN })
+    {
+        var threw = false;
+        try
+        {
+            Calculate(start, end, refrigeratedAt: start,
+                refrigeratorTemperatureCelsius: value);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            threw = true;
+        }
+
+        True(threw);
+    }
+}
+
+static void RefrigeratorSourceCatalog()
+{
+    True(TemperatureSourceCatalog.IsRefrigerator(
+        TemperatureSourceCatalog.RefrigeratorSourceId));
+    True(!TemperatureSourceCatalog.IsShelly(
+        TemperatureSourceCatalog.RefrigeratorSourceId));
+}
 
 static void ConstantDay()
 {
@@ -330,7 +476,8 @@ static MorningResultModel Calculate(
     DateTime? refrigeratedAt = null,
     IReadOnlyList<TemperatureMeasurementModel>? measurements = null,
     int measurementIntervalMinutes = 10,
-    double minimumCoveragePercent = 70)
+    double minimumCoveragePercent = 70,
+    double refrigeratorTemperatureCelsius = 4)
 {
     return new DegreeDayCalculationService().Calculate(
         start,
@@ -348,7 +495,8 @@ static MorningResultModel Calculate(
         measurementIntervalMinutes,
         minimumCoveragePercent,
         370,
-        DegreeDayCalculationService.ConvertNorwegianLocalToUtc(end));
+        DegreeDayCalculationService.ConvertNorwegianLocalToUtc(end),
+        refrigeratorTemperatureCelsius);
 }
 
 static TemperatureMeasurementModel Measurement(
