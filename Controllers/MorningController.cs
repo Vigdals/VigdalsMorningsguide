@@ -110,9 +110,10 @@ public sealed class MorningController : Controller
 
         try
         {
-            await PopulateShellyMeasurementAsync(
-                model,
-                cancellationToken);
+            if (TemperatureSourceCatalog.IsShelly(model.Input.SelectedSourceId))
+            {
+                await PopulateShellyMeasurementAsync(model, cancellationToken);
+            }
 
             model.FrostWarning =
                 await _frostWarningService.GetWarningAsync(
@@ -149,9 +150,10 @@ public sealed class MorningController : Controller
              * Shelly-status framleis kan visast dersom skjemaet
              * inneheld ugyldige verdiar.
              */
-            await PopulateShellyMeasurementAsync(
-                model,
-                cancellationToken);
+            if (TemperatureSourceCatalog.IsShelly(model.Input.SelectedSourceId))
+            {
+                await PopulateShellyMeasurementAsync(model, cancellationToken);
+            }
 
             model.FrostWarning =
                 await _frostWarningService.GetWarningAsync(
