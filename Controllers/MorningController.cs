@@ -17,6 +17,7 @@ public sealed class MorningController : Controller
     private readonly MorningForecastService _morningForecastService;
     private readonly ShellyService _shellyService;
     private readonly ShellyHistoryService _shellyHistoryService;
+    private readonly FrostWarningService _frostWarningService;
     private readonly ILogger<MorningController> _logger;
 
     public MorningController(
@@ -26,6 +27,7 @@ public sealed class MorningController : Controller
         MorningForecastService morningForecastService,
         ShellyService shellyService,
         ShellyHistoryService shellyHistoryService,
+        FrostWarningService frostWarningService,
         ILogger<MorningController> logger)
     {
         _frostService =
@@ -45,6 +47,9 @@ public sealed class MorningController : Controller
 
         _shellyHistoryService =
             shellyHistoryService;
+
+        _frostWarningService =
+            frostWarningService;
 
         _logger =
             logger;
@@ -99,6 +104,11 @@ public sealed class MorningController : Controller
             await PopulateShellyMeasurementAsync(
                 model,
                 cancellationToken);
+
+            model.FrostWarning =
+                await _frostWarningService.GetWarningAsync(
+                    model.ShellyMeasurement,
+                    cancellationToken);
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
@@ -132,6 +142,11 @@ public sealed class MorningController : Controller
             await PopulateShellyMeasurementAsync(
                 model,
                 cancellationToken);
+
+            model.FrostWarning =
+                await _frostWarningService.GetWarningAsync(
+                    model.ShellyMeasurement,
+                    cancellationToken);
 
             /*
              * Kjøleskapsdatoen er berre obligatorisk dersom
