@@ -26,6 +26,16 @@ public static class TemperatureSourceCatalog
     public const string ShellySourceId =
         "SHELLY_LOCAL";
 
+    public const string RefrigeratorSourceId = "REFRIGERATOR";
+
+    public static bool IsRefrigerator(string? sourceId)
+    {
+        return string.Equals(
+            sourceId,
+            RefrigeratorSourceId,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     public static bool IsShelly(
         string? sourceId)
     {
