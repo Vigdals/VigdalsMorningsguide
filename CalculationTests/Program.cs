@@ -25,6 +25,8 @@ var tests = new (string Name, Action Run)[]
     ("Kjøleskap brukar endra temperatur", RefrigeratorSourceCustom),
     ("Ugyldig kjøleskapstemperatur blir stoppa", RefrigeratorSourceInvalid),
     ("Kjeldekatalog kjenner kjøleskap", RefrigeratorSourceCatalog),
+    ("Overgang til kjøleskap brukar vald temperatur", RefrigeratorTransitionCustomTemperature),
+    ("Overgang til kjøleskap gir rett prognose", RefrigeratorTransitionForecast),
     ("Kjende kjelder blir logga med kanonisk ID", KnownSourceIdsForLogging),
     ("Ukjent kjelde får trygg loggverdi", UnknownSourceIdsForLogging),
     ("Injisert linjeskift blir ikkje logga", InjectionSourceIdForLogging)
@@ -246,6 +248,52 @@ static void RefrigeratorSourceInvalid()
 
         True(threw);
     }
+}
+
+static void RefrigeratorTransitionCustomTemperature()
+{
+    var start = Local(2026, 8, 1);
+    var moveToRefrigerator = Local(2026, 8, 1, 12);
+    var end = Local(2026, 8, 2);
+
+    var result = Calculate(
+        start,
+        end,
+        refrigeratedAt: moveToRefrigerator,
+        measurements: [Measurement(start, 10)],
+        measurementIntervalMinutes: 12 * 60,
+        refrigeratorTemperatureCelsius: 6);
+
+    // 12 timar ved 10 °C + 12 timar ved 6 °C = 8 døgngrader.
+    Near(8, result.TotalDegreeDays);
+    Near(6, result.RefrigeratorTemperatureCelsius!.Value);
+    Near(100, result.CoveragePercent);
+    Equal(2, result.Days[0].Periods.Count);
+    Near(5, result.Days[0].Periods[0].DegreeDays);
+    Near(3, result.Days[0].Periods[1].DegreeDays);
+}
+
+static void RefrigeratorTransitionForecast()
+{
+    var start = Local(2026, 8, 1);
+    var end = Local(2026, 8, 2);
+    var result = Calculate(
+        start,
+        end,
+        refrigeratedAt: start,
+        measurements: [],
+        refrigeratorTemperatureCelsius: 6);
+
+    var forecast = new MorningForecastService()
+        .CalculateAtConstantTemperature(
+            result,
+            result.RefrigeratorTemperatureCelsius!.Value);
+
+    True(forecast?.EstimatedTargetAt is not null);
+    var expectedHours = result.RemainingDegreeDays / 6 * 24;
+    var actualHours = (forecast!.EstimatedTargetAt!.Value.ToUniversalTime()
+                       - result.CalculatedAtUtc).TotalHours;
+    Near(expectedHours, actualHours);
 }
 
 static void RefrigeratorSourceCatalog()
