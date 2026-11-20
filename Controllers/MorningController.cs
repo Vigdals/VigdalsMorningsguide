@@ -331,7 +331,8 @@ public sealed class MorningController : Controller
                     exception,
                     "Tidsavbrot ved henting av temperaturdata frå " +
                     "{SelectedSourceId}.",
-                    model.Input.SelectedSourceId);
+                    TemperatureSourceCatalog.GetSafeSourceIdForLogging(
+                        model.Input.SelectedSourceId));
             }
 
             ModelState.AddModelError(
@@ -390,7 +391,8 @@ public sealed class MorningController : Controller
                     exception,
                     "Klarte ikkje å hente temperaturdata frå " +
                     "{SelectedSourceId}.",
-                    model.Input.SelectedSourceId);
+                    TemperatureSourceCatalog.GetSafeSourceIdForLogging(
+                        model.Input.SelectedSourceId));
             }
 
             ModelState.AddModelError(
@@ -407,7 +409,8 @@ public sealed class MorningController : Controller
                 exception,
                 "Klarte ikkje å tolke temperaturdata frå " +
                 "{SelectedSourceId}.",
-                model.Input.SelectedSourceId);
+                TemperatureSourceCatalog.GetSafeSourceIdForLogging(
+                    model.Input.SelectedSourceId));
 
             ModelState.AddModelError(
                 string.Empty,
