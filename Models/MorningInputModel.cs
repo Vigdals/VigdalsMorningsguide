@@ -27,7 +27,7 @@ public sealed class MorningInputModel
         1,
         120,
         ErrorMessage = "Målet må vere mellom 1 og 120 døgngrader.")]
-    public double TargetDegreeDays { get; set; } = 80;
+    public double TargetDegreeDays { get; set; } = 60;
 
     [Display(
         Name = "Har du lagt kjøtet i kjøleskap i løpet av mørningsperioden?")]

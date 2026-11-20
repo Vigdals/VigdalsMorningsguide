@@ -95,7 +95,7 @@ public sealed class MorningController : Controller
                                 .ShellySourceId,
 
                         TargetDegreeDays =
-                            80,
+                            60,
 
                         HasBeenRefrigerated =
                             false,
@@ -762,7 +762,8 @@ public sealed class MorningController : Controller
             catch (HttpRequestException) { }
             catch (JsonException) { }
             catch (OperationCanceledException)
-                when (!cancellationToken.IsCancellationRequested) { }
+                when (!cancellationToken.IsCancellationRequested)
+            { }
         }
 
         var warning = await _frostWarningService.GetWarningAsync(
