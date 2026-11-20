@@ -59,7 +59,8 @@ public sealed class ShellyHistoryService
         DateTime hungAt,
         double targetDegreeDays,
         DateTime? refrigeratedAt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        double refrigeratorTemperatureCelsius = 4.0)
     {
         ValidateConfiguration();
 
@@ -236,7 +237,8 @@ public sealed class ShellyHistoryService
             measurementIntervalMinutes,
             _options.MinimumCoveragePercent,
             _options.MaximumDaysBack,
-            nowUtc);
+            nowUtc,
+            refrigeratorTemperatureCelsius);
     }
 
     private string BuildRequestUri(
