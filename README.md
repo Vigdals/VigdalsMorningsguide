@@ -33,7 +33,9 @@ Pi](https://img.shields.io/badge/Raspberry_Pi-Hosted-C51A4A)
 - Eiga kjelde «Kjøleskap» reknar heile perioden ved standard 4 °C, eller
   ein annan temperatur mellom 0 og 15 °C (strengt større enn 0).
   Det eksisterande valet «Lagt i kjøleskap» for overgang frå utandørs
-  mørning blir verande og brukar framleis fast 4 °C.
+  mørning blir verande, men har no same redigerbare kjøleskapstemperatur
+  (4 °C som standard). Vald temperatur blir brukt i både døgngrader
+  og prognose etter tidspunktet kjøtet vart lagt inn.
 - 🐳 Docker-basert drift
 - HTTPS med Let's Encrypt
 - Automatisk deploy frå GitHub
