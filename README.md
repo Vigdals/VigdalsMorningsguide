@@ -11,6 +11,15 @@ Pi](https://img.shields.io/badge/Raspberry_Pi-Hosted-C51A4A)
 
 ---
 
+## Design
+
+- Haustpalett med dempa rustraud, varm grå og skogsgrøn/oliven som aksent.
+- Flate kort med tydelege kantlinjer og meir firkanta hjørne, utan gradientar,
+  glass-effektar eller store skuggar.
+- Mørk brun footer med god kontrast, kompakt oppsett på mobil.
+- Fargeval og spacing ligg i `wwwroot/css/site.css`; ingen endringar i
+  utrekningar eller JavaScript.
+
 ## Funksjonar
 
 - 🦌 Reknar ut døgngrader for optimal mørning
