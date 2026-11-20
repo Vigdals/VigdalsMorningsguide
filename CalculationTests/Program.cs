@@ -20,7 +20,11 @@ var tests = new (string Name, Action Run)[]
     ("Gammal Shelly-måling varslar ikkje", StaleShellyNoFrost),
     ("MET-prognose innan 48 timar varslar", ForecastFrost),
     ("Prognose utanfor 48 timar varslar ikkje", ForecastOutsideHorizon),
-    ("Null grader varslar ikkje", NoFalseFrostWarning)
+    ("Null grader varslar ikkje", NoFalseFrostWarning),
+    ("Kjøleskap 4 C gir 4 DG per døgn", RefrigeratorSourceDefault),
+    ("Kjøleskap brukar endra temperatur", RefrigeratorSourceCustom),
+    ("Ugyldig kjøleskapstemperatur blir stoppa", RefrigeratorSourceInvalid),
+    ("Kjeldekatalog kjenner kjøleskap", RefrigeratorSourceCatalog)
 };
 
 var failures = new List<string>();
@@ -129,6 +133,62 @@ static void NoFalseFrostWarning()
         ],
         now);
     True(warning is null);
+}
+
+static void RefrigeratorSourceDefault()
+{
+    var start = Local(2026, 11, 18, 10);
+    var end = Local(2026, 11, 19, 10);
+    var result = Calculate(
+        start, end,
+        refrigeratedAt: start,
+        measurements: []);
+    Near(4, result.TotalDegreeDays);
+    Near(4, result.RefrigeratorTemperatureCelsius!.Value);
+    Near(100, result.CoveragePercent);
+}
+
+static void RefrigeratorSourceCustom()
+{
+    var start = Local(2026, 11, 18, 10);
+    var end = Local(2026, 11, 19, 10);
+    var result = Calculate(
+        start, end,
+        refrigeratedAt: start,
+        measurements: [],
+        refrigeratorTemperatureCelsius: 6.5);
+    Near(6.5, result.TotalDegreeDays);
+    Near(6.5, result.AverageTemperature!.Value);
+    Near(6.5, result.RefrigeratorTemperatureCelsius!.Value);
+}
+
+static void RefrigeratorSourceInvalid()
+{
+    var start = Local(2026, 11, 18, 10);
+    var end = Local(2026, 11, 19, 10);
+    foreach (var value in new[] { 0.0, -1.0, 15.1, double.NaN })
+    {
+        var threw = false;
+        try
+        {
+            Calculate(start, end, refrigeratedAt: start,
+                refrigeratorTemperatureCelsius: value);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            threw = true;
+        }
+
+        True(threw);
+    }
+}
+
+static void RefrigeratorSourceCatalog()
+{
+    True(TemperatureSourceCatalog.IsRefrigerator(
+        TemperatureSourceCatalog.RefrigeratorSourceId));
+    True(!TemperatureSourceCatalog.IsShelly(
+        TemperatureSourceCatalog.RefrigeratorSourceId));
 }
 
 static void ConstantDay()
@@ -416,7 +476,8 @@ static MorningResultModel Calculate(
     DateTime? refrigeratedAt = null,
     IReadOnlyList<TemperatureMeasurementModel>? measurements = null,
     int measurementIntervalMinutes = 10,
-    double minimumCoveragePercent = 70)
+    double minimumCoveragePercent = 70,
+    double refrigeratorTemperatureCelsius = 4)
 {
     return new DegreeDayCalculationService().Calculate(
         start,
@@ -434,7 +495,8 @@ static MorningResultModel Calculate(
         measurementIntervalMinutes,
         minimumCoveragePercent,
         370,
-        DegreeDayCalculationService.ConvertNorwegianLocalToUtc(end));
+        DegreeDayCalculationService.ConvertNorwegianLocalToUtc(end),
+        refrigeratorTemperatureCelsius);
 }
 
 static TemperatureMeasurementModel Measurement(
