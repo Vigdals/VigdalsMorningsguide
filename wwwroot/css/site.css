@@ -1,231 +1,142 @@
+/*
+ * Vigdals mørningsguide
+ * Haustprofil: varme, dempa jordtonar og tydeleg struktur.
+ * Flate fargar og kantlinjer framfor gradientar og dekorative skuggar.
+ */
 :root {
     color-scheme: light;
 
-    /*
-     * Profil
-     */
-    --brand-ink: #064E3B;
-    --brand-champagne: #F8E7C9;
+    --brand-ink: #654337;
+    --brand-champagne: #f7f2ed;
+    --accent: #974b37;
+    --accent-deep: #753727;
+    --olive: #53634e;
 
-    /*
-     * Side og flater
-     */
-    --page-background: #fbf4e8;
-    --page-background-deep: #f6e5c7;
+    --page-background: #f0eeeb;
+    --page-background-deep: #e7e1da;
+    --surface: #faf9f7;
+    --surface-muted: #eee8e2;
+    --surface-strong: #e1d7ce;
 
-    --surface: #fffdf8;
-    --surface-muted: rgba(248, 231, 201, 0.38);
-    --surface-strong: rgba(248, 231, 201, 0.68);
-
-    /*
-     * Grøne nyansar
-     */
-    --forest-900: var(--brand-ink);
-    --forest-800: var(--brand-ink);
-    --forest-700: #0a5b46;
-    --forest-600: #24705d;
-    --forest-100: rgba(6, 78, 59, 0.08);
-
-    /*
-     * Beheld variabelnamna for kompatibilitet
-     * med eksisterande CSS.
-     */
+    /* Kompatibilitet med etablerte klasse- og variabelnamn. */
+    --forest-900: #332d28;
+    --forest-800: #45382f;
+    --forest-700: #654337;
+    --forest-600: #785648;
+    --forest-100: #eee8e2;
     --leather-700: var(--brand-ink);
-    --leather-600: var(--brand-ink);
+    --leather-600: var(--accent);
 
-    /*
-     * Tekst
-     */
-    --text-primary: #173a30;
-    --text-secondary: rgba(6, 78, 59, 0.72);
-    --text-muted: rgba(6, 78, 59, 0.56);
+    --text-primary: #2d2a27;
+    --text-secondary: #5b534e;
+    --text-muted: #70655e;
+    --border: #d3c8bd;
+    --border-light: #e2d9d0;
 
-    /*
-     * Kantlinjer
-     */
-    --border: rgba(6, 78, 59, 0.16);
-    --border-light: rgba(6, 78, 59, 0.10);
+    --success: #465b40;
+    --success-background: #e7ede3;
+    --warning: #784734;
+    --warning-background: #f4e6df;
+    --danger: #8e352d;
+    --danger-background: #f7e6e2;
+    --info-background: #ebe9e4;
 
-    /*
-     * Semantiske fargar
-     */
-    --success: var(--brand-ink);
-    --success-background: rgba(6, 78, 59, 0.08);
+    --shadow-small: none;
+    --shadow-medium: none;
 
-    --warning: #765927;
-    --warning-background: rgba(248, 231, 201, 0.72);
+    --radius-small: 0.25rem;
+    --radius-medium: 0.375rem;
+    --radius-large: 0.5rem;
 
-    --danger: #9d3f39;
-    --danger-background: #f8e6e3;
-
-    --info-background: rgba(6, 78, 59, 0.07);
-
-    /*
-     * Skuggar
-     */
-    --shadow-small:
-        0 8px 24px rgba(6, 78, 59, 0.07),
-        0 2px 6px rgba(6, 78, 59, 0.04);
-
-    --shadow-medium:
-        0 18px 48px rgba(6, 78, 59, 0.12),
-        0 5px 14px rgba(6, 78, 59, 0.06);
-
-    /*
-     * Radius
-     */
-    --radius-small: 0.65rem;
-    --radius-medium: 0.95rem;
-    --radius-large: 1.25rem;
+    --bs-border-color: var(--border);
+    --bs-body-color: var(--text-primary);
 }
-
-
-/* ==========================================================
-   Grunnstil
-   ========================================================== */
 
 html {
     min-height: 100%;
     font-size: 16px;
-
-    background: #fbf3e5;
+    background: var(--page-background);
 }
 
 body {
+    display: flex;
+    flex-direction: column;
     min-height: 100vh;
     margin: 0;
-
     color: var(--text-primary);
-
-    background:
-        radial-gradient(
-            circle at 7% 0%,
-            rgba(6, 78, 59, 0.10),
-            transparent 31rem
-        ),
-        radial-gradient(
-            circle at 96% 8%,
-            rgba(248, 231, 201, 0.92),
-            transparent 34rem
-        ),
-        linear-gradient(
-            180deg,
-            #fffdf8 0%,
-            #fbf4e8 43%,
-            #f8e7c9 135%
-        );
-
-    font-family:
-        Inter,
-        ui-sans-serif,
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-
+    background: var(--page-background);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
     line-height: 1.55;
-
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
 }
 
 ::selection {
-    color: var(--brand-champagne);
-    background: var(--brand-ink);
+    color: #fff;
+    background: var(--accent);
 }
 
-
-/* ==========================================================
-   Hovudinnhald
-   ========================================================== */
-
 .site-main {
-    min-height: calc(100vh - 5rem);
+    flex: 1 0 auto;
+    min-width: 0;
 }
 
 .site-main > .container {
-    max-width: 1180px;
+    max-width: 1140px;
 }
 
-
-/* ==========================================================
-   Footer
-   ========================================================== */
-
+/* Footeren skal vere ei eiga avsluttande flate, ikkje ein del av bakgrunnen. */
 .site-footer {
-    margin-top: 2rem;
-
-    padding: 1.75rem 0 2rem;
-
-    color: rgba(6, 78, 59, 0.58);
-
-    border-top:
-        1px solid rgba(6, 78, 59, 0.08);
-
-    background:
-        linear-gradient(
-            180deg,
-            rgba(248, 231, 201, 0),
-            rgba(248, 231, 201, 0.30)
-        );
-
+    flex-shrink: 0;
+    margin-top: 2.5rem;
+    padding: 1.9rem 0 2.1rem;
+    color: #f2eae4;
+    border-top: 4px solid #a3634b;
+    background: #392d2a;
     font-size: 0.875rem;
 }
 
 .footer-content {
     display: flex;
-    justify-content: center;
     align-items: center;
-
-    gap: 0.55rem;
-
+    justify-content: center;
     flex-wrap: wrap;
+    gap: 0.55rem;
+    text-align: center;
 }
 
 .footer-separator {
-    opacity: 0.6;
+    color: #cbb7a9;
 }
 
 .site-footer a {
-    color: var(--brand-ink);
-
+    color: #fff0e3;
     font-weight: 700;
+    text-decoration: underline;
+    text-decoration-color: #d5a88b;
+    text-underline-offset: 0.2em;
 }
 
+.site-footer a:hover,
+.site-footer a:focus-visible {
+    color: #ffffff;
+    text-decoration-color: #ffffff;
+}
 
-/* ==========================================================
-   Topp / hero
-   ========================================================== */
-
+/* Enkel, editorial toppflate med eit diskret hjortegevir. */
 .guide-header-with-antlers {
     position: relative;
-
     display: flex;
     align-items: center;
-
-    min-height: 11.5rem;
     max-width: 100%;
-
-    padding-top: 2.25rem;
-    padding-right: 18rem;
-    padding-bottom: 2.25rem;
-
-    border: 1px solid rgba(6, 78, 59, 0.12);
-    border-radius: 1.4rem;
-
-    background:
-        linear-gradient(
-            125deg,
-            rgba(248, 231, 201, 0.82) 0%,
-            rgba(255, 253, 248, 0.94) 55%,
-            rgba(6, 78, 59, 0.06) 100%
-        );
-
-    box-shadow:
-        0 18px 48px rgba(6, 78, 59, 0.07);
-
+    min-height: 10rem;
+    padding: 2rem 17rem 2rem 2.3rem;
     overflow: hidden;
+    border: 1px solid #cdbeb2;
+    border-left: 5px solid var(--accent);
+    border-radius: var(--radius-large);
+    background: #e7e0d9;
 }
 
 .guide-header-content {
@@ -235,148 +146,84 @@ body {
 
 .guide-antlers {
     position: absolute;
-
     top: 50%;
-    right: 2.25rem;
-
+    right: 2rem;
     z-index: 1;
-
-    width: 15rem;
-    max-height: 10rem;
-
+    width: 13rem;
+    max-height: 9rem;
     object-fit: contain;
-
-    opacity: 0.16;
-
+    opacity: 0.20;
     transform: translateY(-50%);
-
-    filter:
-        grayscale(1)
-        sepia(0.25)
-        saturate(0.7)
-        contrast(0.9);
-
-    mix-blend-mode: multiply;
-
+    filter: grayscale(1) sepia(0.4) saturate(0.8) contrast(1.2);
     pointer-events: none;
     user-select: none;
 }
 
 .guide-header {
     position: relative;
-
-    max-width: 860px;
-
-    padding-left: 3.1rem;
+    max-width: none;
 }
 
 .guide-header::before {
-    position: absolute;
-
-    top: 1.7rem;
-    bottom: 1.7rem;
-    left: 1.45rem;
-
-    width: 5px;
-
-    border-radius: 99px;
-
-    background: var(--brand-ink);
-
-    box-shadow:
-        0 0 0 1px rgba(6, 78, 59, 0.04);
-
-    content: "";
-}
-
-.guide-header .badge {
-    padding: 0.55rem 0.8rem;
-
-    color: var(--brand-ink) !important;
-
-    border:
-        1px solid rgba(6, 78, 59, 0.18);
-
-    background:
-        var(--brand-champagne) !important;
-
-    font-weight: 750;
-    letter-spacing: 0.015em;
+    content: none;
 }
 
 .guide-header h1 {
-    color: var(--brand-ink);
-
-    font-weight: 800;
-    letter-spacing: -0.045em;
+    margin-bottom: 0.6rem !important;
+    color: #392f2b;
+    font-weight: 750;
+    letter-spacing: -0.035em;
 }
 
 .guide-header .lead {
-    max-width: 760px;
-
-    color:
-        rgba(6, 78, 59, 0.70) !important;
+    max-width: 45rem;
+    color: #5b4b43 !important;
 }
 
+.guide-header .badge {
+    padding: 0.45rem 0.65rem;
+    border: 1px solid #c8b4a5;
+    border-radius: var(--radius-small);
+    color: #55382e !important;
+    background: #f5eee8 !important;
+    font-weight: 700;
+}
 
-/* ==========================================================
-   Kort
-   ========================================================== */
-
+/* Kort med reine flater. Ingen glass-effekt eller hover-skugge. */
 .guide-card,
 .card {
     color: var(--text-primary);
-
-    border:
-        1px solid rgba(6, 78, 59, 0.13);
-
+    border: 1px solid var(--border);
     border-radius: var(--radius-large);
-
-    background:
-        linear-gradient(
-            145deg,
-            rgba(255, 255, 255, 0.95),
-            rgba(255, 253, 248, 0.92)
-        );
-
-    box-shadow: var(--shadow-small);
+    background: var(--surface);
+    box-shadow: none;
 }
 
 .guide-card {
     overflow: hidden;
-
-    backdrop-filter: blur(8px);
+    backdrop-filter: none;
 }
 
 .guide-card:hover {
-    border-color:
-        rgba(6, 78, 59, 0.20);
-
-    box-shadow: var(--shadow-medium);
+    border-color: var(--border);
+    box-shadow: none;
 }
 
 .guide-card-header {
-    padding: 1.35rem 1.5rem;
-
-    border-bottom:
-        1px solid rgba(6, 78, 59, 0.10);
-
-    background:
-        linear-gradient(
-            100deg,
-            rgba(248, 231, 201, 0.88) 0%,
-            rgba(248, 231, 201, 0.48) 66%,
-            rgba(6, 78, 59, 0.045) 100%
-        );
+    padding: 1.1rem 1.45rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-muted);
 }
 
 .guide-card-body {
-    padding: 1.5rem;
+    padding: 1.45rem;
 }
 
 .guide-card h2,
 .guide-card h3 {
-    color: var(--brand-ink);
+    color: #43352f;
+    font-weight: 700;
+    letter-spacing: -0.012em;
 }
 
 .text-body-secondary,
@@ -385,71 +232,68 @@ body {
     color: var(--text-secondary) !important;
 }
 
+.bg-body-tertiary {
+    background-color: var(--surface-muted) !important;
+}
 
-/* ==========================================================
-   Skjema
-   ========================================================== */
+.rounded-3,
+.rounded-4 {
+    border-radius: var(--radius-medium) !important;
+}
 
+/* Skjemafelt, knappar og switchar. */
 .form-label {
-    margin-bottom: 0.45rem;
-
-    color: var(--brand-ink);
+    margin-bottom: 0.4rem;
+    color: #43352f;
+    font-weight: 650;
 }
 
 .form-control,
 .form-select {
-    min-height: 3.25rem;
-
-    color: var(--text-primary);
-
-    border:
-        1px solid rgba(6, 78, 59, 0.18);
-
+    min-height: 3rem;
+    border: 1px solid #bfb2a8;
     border-radius: var(--radius-small);
-
-    background-color:
-        rgba(255, 255, 255, 0.90);
-
-    box-shadow:
-        inset 0 1px 1px rgba(6, 78, 59, 0.025),
-        0 1px 2px rgba(6, 78, 59, 0.02);
-
-    transition:
-        border-color 140ms ease,
-        box-shadow 140ms ease,
-        background-color 140ms ease;
+    color: var(--text-primary);
+    background-color: #ffffff;
+    box-shadow: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .form-control:hover,
 .form-select:hover {
-    border-color:
-        rgba(6, 78, 59, 0.38);
+    border-color: #8a7263;
 }
 
 .form-control:focus,
 .form-select:focus {
     color: var(--text-primary);
-
-    border-color: var(--brand-ink);
-
+    border-color: var(--accent);
     background-color: #ffffff;
-
-    box-shadow:
-        0 0 0 0.22rem rgba(6, 78, 59, 0.14),
-        0 5px 16px rgba(6, 78, 59, 0.06);
+    box-shadow: 0 0 0 0.2rem rgba(151, 75, 55, 0.19);
 }
 
 .form-control::placeholder {
-    color:
-        rgba(6, 78, 59, 0.45);
+    color: #756a62;
 }
 
 .form-control:disabled,
 .form-control[readonly] {
     color: var(--text-secondary);
+    background: #eeeae6;
+}
 
-    background:
-        rgba(248, 231, 201, 0.54);
+.form-check-input {
+    border-color: #9f9083;
+}
+
+.form-check-input:checked {
+    border-color: var(--accent);
+    background-color: var(--accent);
+}
+
+.form-check-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 0.2rem rgba(151, 75, 55, 0.18);
 }
 
 input[type="number"] {
@@ -457,257 +301,131 @@ input[type="number"] {
 }
 
 .input-group-text {
-    color: var(--brand-champagne);
-
-    border-color: var(--brand-ink);
-
-    background: var(--brand-ink);
-
-    font-weight: 800;
+    border-color: #654337;
+    border-radius: var(--radius-small);
+    color: #fffaf6;
+    background: #654337;
+    font-weight: 700;
 }
-
-
-/* ==========================================================
-   Knappar
-   ========================================================== */
 
 .btn {
     border-radius: var(--radius-small);
-
-    font-weight: 750;
-
-    transition:
-        transform 140ms ease,
-        box-shadow 140ms ease,
-        background-color 140ms ease,
-        border-color 140ms ease;
+    font-weight: 700;
+    transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .btn-primary {
-    color: var(--brand-champagne);
-
-    border-color: var(--brand-ink);
-
-    background:
-        linear-gradient(
-            135deg,
-            #0a604a 0%,
-            var(--brand-ink) 72%
-        );
-
-    box-shadow:
-        0 10px 24px rgba(6, 78, 59, 0.22);
-
-    font-weight: 800;
+    color: #ffffff;
+    border: 1px solid var(--accent-deep);
+    background: var(--accent);
+    box-shadow: none;
+    font-weight: 700;
 }
 
 .btn-primary:hover,
-.btn-primary:focus {
-    color: #fff8eb;
-
-    border-color: #043d2f;
-
-    background:
-        linear-gradient(
-            135deg,
-            var(--brand-ink),
-            #043d2f
-        );
-
-    transform: translateY(-1px);
-
-    box-shadow:
-        0 14px 30px rgba(6, 78, 59, 0.28);
+.btn-primary:focus,
+.btn-primary:active {
+    color: #ffffff;
+    border-color: #54291f;
+    background: var(--accent-deep);
+    transform: none;
+    box-shadow: none;
 }
 
 .btn-primary:focus-visible {
-    outline:
-        3px solid rgba(6, 78, 59, 0.34);
-
+    outline: 3px solid rgba(151, 75, 55, 0.42);
     outline-offset: 3px;
 }
 
-.btn-primary:active {
-    color: var(--brand-champagne);
-
-    border-color: var(--brand-ink);
-
-    background: var(--brand-ink);
-
-    transform: translateY(0);
-}
-
-
-/* ==========================================================
-   Estimert tid
-   ========================================================== */
-
+/* Estimert tid og oppsummeringar har funksjon framfor dekor. */
 .remaining-time-card {
     padding: 1.1rem 1.25rem;
-
-    color: var(--brand-ink);
-
-    border:
-        1px solid rgba(6, 78, 59, 0.16);
-
-    border-left:
-        5px solid var(--brand-ink);
-
+    color: var(--text-primary);
+    border: 1px solid #cfbdaf;
+    border-left: 4px solid var(--accent);
     border-radius: var(--radius-medium);
-
-    background:
-        linear-gradient(
-            125deg,
-            rgba(248, 231, 201, 0.84),
-            rgba(255, 253, 248, 0.95)
-        );
-
-    box-shadow:
-        0 8px 22px rgba(6, 78, 59, 0.06);
+    background: #efe8e1;
+    box-shadow: none;
 }
 
 .remaining-time-card-complete {
-    border-color:
-        rgba(6, 78, 59, 0.20);
-
-    border-left-color:
-        var(--brand-ink);
-
-    background:
-        linear-gradient(
-            125deg,
-            rgba(6, 78, 59, 0.10),
-            rgba(248, 231, 201, 0.56)
-        );
+    border-color: #b8c5b3;
+    border-left-color: var(--success);
+    background: var(--success-background);
 }
 
 .remaining-time-label {
-    margin-bottom: 0.2rem;
-
-    color: var(--brand-ink);
-
-    font-size: 0.75rem;
-    font-weight: 800;
-    letter-spacing: 0.06em;
+    margin-bottom: 0.25rem;
+    color: #645149;
+    font-size: 0.76rem;
+    font-weight: 750;
+    letter-spacing: 0.035em;
     text-transform: uppercase;
 }
 
-.remaining-time-card-complete
-.remaining-time-label {
-    color: var(--brand-ink);
+.remaining-time-card-complete .remaining-time-label {
+    color: #3e5637;
 }
 
 .remaining-time-value {
-    color: var(--brand-ink);
-
-    font-size:
-        clamp(1.45rem, 3vw, 1.9rem);
-
-    font-weight: 800;
-    line-height: 1.15;
-    letter-spacing: -0.025em;
-
+    color: #3f302c;
+    font-size: clamp(1.45rem, 3vw, 1.9rem);
+    font-weight: 750;
+    line-height: 1.18;
+    letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
 }
 
 .remaining-time-description {
-    margin-top: 0.3rem;
-
+    margin-top: 0.35rem;
     color: var(--text-secondary);
-
-    font-size: 0.9rem;
+    font-size: 0.92rem;
 }
-
-
-/* ==========================================================
-   Oppsummeringskort
-   ========================================================== */
 
 .summary-card {
     height: 100%;
-
-    padding: 1.05rem;
-
-    border:
-        1px solid rgba(6, 78, 59, 0.11);
-
+    padding: 1.1rem;
+    border: 1px solid var(--border);
     border-radius: var(--radius-medium);
-
-    background:
-        linear-gradient(
-            145deg,
-            rgba(255, 255, 255, 0.96),
-            rgba(248, 231, 201, 0.46)
-        );
-
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    background: #f5f2ee;
+    box-shadow: none;
 }
 
 .summary-card::before {
-    display: block;
-
-    width: 3rem;
-    height: 4px;
-
-    margin-bottom: 0.8rem;
-
-    border-radius: 99px;
-
-    background: var(--brand-ink);
-
-    content: "";
+    content: none;
 }
 
 .summary-label {
-    margin-bottom: 0.3rem;
-
-    color:
-        rgba(6, 78, 59, 0.68);
-
+    margin-bottom: 0.35rem;
+    color: #65554d;
     font-size: 0.77rem;
-    font-weight: 800;
-    letter-spacing: 0.05em;
+    font-weight: 750;
+    letter-spacing: 0.035em;
     text-transform: uppercase;
 }
 
 .summary-value {
-    color: var(--brand-ink);
-
-    font-size:
-        clamp(1.25rem, 2vw, 1.65rem);
-
-    font-weight: 800;
+    color: #47372f;
+    font-size: clamp(1.25rem, 2vw, 1.65rem);
+    font-weight: 750;
     line-height: 1.2;
-
     font-variant-numeric: tabular-nums;
 }
 
 .summary-target {
-    color:
-        rgba(6, 78, 59, 0.56);
-
+    color: #71655d;
     font-size: 1rem;
     font-weight: 400;
 }
 
 .summary-subtext {
-    margin-top: 0.45rem;
-
-    color:
-        rgba(6, 78, 59, 0.58);
-
-    font-size: 0.84rem;
+    margin-top: 0.4rem;
+    color: #645950;
+    font-size: 0.86rem;
 }
-
-
-/* ==========================================================
-   Detaljar
-   ========================================================== */
 
 .result-details dt {
     color: var(--text-secondary);
-
     font-weight: 700;
 }
 
@@ -715,194 +433,117 @@ input[type="number"] {
     color: var(--text-primary);
 }
 
-
-/* ==========================================================
-   Framdrift
-   ========================================================== */
-
+/* Resultat og datatabellar. */
 .degree-progress,
 .progress {
-    height: 1.45rem;
-
+    height: 1.3rem;
     overflow: hidden;
-
-    border:
-        1px solid rgba(6, 78, 59, 0.13);
-
-    border-radius: 999px;
-
-    background:
-        rgba(248, 231, 201, 0.76);
-
-    box-shadow:
-        inset 0 1px 3px rgba(6, 78, 59, 0.06);
+    border: 1px solid #c6c5b8;
+    border-radius: var(--radius-small);
+    background: #e7e4de;
+    box-shadow: none;
 }
 
 .progress-bar {
-    color: var(--brand-champagne);
-
-    background:
-        linear-gradient(
-            90deg,
-            #0c6a52,
-            var(--brand-ink)
-        );
-
-    font-weight: 800;
-
+    color: #ffffff;
+    background: var(--olive);
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
 
+.table-responsive {
+    scrollbar-color: #a99b8f transparent;
+}
 
-/* ==========================================================
-   Varsel
-   ========================================================== */
+.table {
+    --bs-table-color: var(--text-primary);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--border-light);
+    --bs-table-hover-color: var(--text-primary);
+    --bs-table-hover-bg: #f1ece7;
+    margin-bottom: 0;
+}
 
+.table-light {
+    --bs-table-color: #43352f;
+    --bs-table-bg: #ebe5df;
+    --bs-table-border-color: var(--border);
+}
+
+.day-table thead th {
+    padding-top: 0.95rem;
+    padding-bottom: 0.95rem;
+    color: #493930;
+    font-size: 0.77rem;
+    font-weight: 750;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.day-table tbody td {
+    padding-top: 0.95rem;
+    padding-bottom: 0.95rem;
+    vertical-align: middle;
+}
+
+/* Alvorlege varsel må framleis skilje seg tydeleg ut. */
 .alert {
     border-width: 1px;
     border-radius: var(--radius-medium);
 }
 
 .alert-info {
-    color: var(--brand-ink);
-
-    border-color:
-        rgba(6, 78, 59, 0.18);
-
-    background:
-        rgba(6, 78, 59, 0.07);
+    color: #3c4840;
+    border-color: #c7d0c4;
+    background: #edf0eb;
 }
 
 .alert-success {
-    color: var(--brand-ink);
-
-    border-color:
-        rgba(6, 78, 59, 0.20);
-
-    background:
-        rgba(6, 78, 59, 0.09);
+    color: #334c2e;
+    border-color: #bccdb7;
+    background: var(--success-background);
 }
 
 .alert-warning {
-    color: #634c27;
-
-    border-color:
-        rgba(172, 132, 68, 0.26);
-
-    background:
-        rgba(248, 231, 201, 0.72);
+    color: var(--warning);
+    border-color: #ddbcab;
+    background: var(--warning-background);
 }
 
-/*
- * Feil held vi raude.
- * Det gjer semantikken tydelegare enn å bruke profilgrønt.
- */
 .alert-danger {
-    color: #79322d;
-
-    border-color: #e2bcb7;
-
+    color: #752a24;
+    border-color: #d8a9a2;
     background: var(--danger-background);
 }
 
 .frost-warning {
-    padding: 1.2rem 1.4rem;
+    padding: 1.1rem 1.35rem;
     border-left: 5px solid var(--danger);
-    box-shadow: 0 8px 22px rgba(157, 63, 57, 0.10);
+    box-shadow: none;
 }
 
-
-/* ==========================================================
-   Badges
-   ========================================================== */
+.badge,
+.badge.rounded-pill {
+    border-radius: var(--radius-small) !important;
+}
 
 .badge.text-bg-primary {
-    color: var(--brand-ink) !important;
-
-    border:
-        1px solid rgba(6, 78, 59, 0.18);
-
-    background:
-        var(--brand-champagne) !important;
+    color: #59372b !important;
+    border: 1px solid #d5bba9;
+    background: #efe0d5 !important;
 }
 
 .badge.text-bg-success {
-    color:
-        var(--brand-champagne) !important;
-
-    border:
-        1px solid var(--brand-ink);
-
-    background:
-        var(--brand-ink) !important;
+    color: #ffffff !important;
+    border: 1px solid #3e5538;
+    background: var(--success) !important;
 }
 
-
-/* ==========================================================
-   Tabell
-   ========================================================== */
-
-.table-responsive {
-    scrollbar-color:
-        rgba(6, 78, 59, 0.28)
-        transparent;
+.badge.text-bg-warning {
+    color: #663b2c !important;
+    background: #f0d8cc !important;
 }
-
-.table {
-    --bs-table-color:
-        var(--text-primary);
-
-    --bs-table-bg:
-        transparent;
-
-    --bs-table-border-color:
-        rgba(6, 78, 59, 0.09);
-
-    --bs-table-hover-color:
-        var(--text-primary);
-
-    --bs-table-hover-bg:
-        rgba(6, 78, 59, 0.045);
-
-    margin-bottom: 0;
-}
-
-.table-light {
-    --bs-table-color:
-        var(--brand-ink);
-
-    --bs-table-bg:
-        rgba(248, 231, 201, 0.48);
-
-    --bs-table-border-color:
-        rgba(6, 78, 59, 0.09);
-}
-
-.day-table thead th {
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-
-    color: var(--brand-ink);
-
-    font-size: 0.76rem;
-    font-weight: 800;
-    letter-spacing: 0.045em;
-    text-transform: uppercase;
-
-    white-space: nowrap;
-}
-
-.day-table tbody td {
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-
-    vertical-align: middle;
-}
-
-
-/* ==========================================================
-   Validering
-   ========================================================== */
 
 .field-validation-error,
 .validation-summary-errors {
@@ -915,74 +556,52 @@ input[type="number"] {
 
 .input-validation-error:focus {
     border-color: var(--danger);
-
-    box-shadow:
-        0 0 0 0.22rem rgba(157, 63, 57, 0.14);
+    box-shadow: 0 0 0 0.2rem rgba(142, 53, 45, 0.16);
 }
 
-
-/* ==========================================================
-   Lenker og fokus
-   ========================================================== */
-
+/* Lenker og fokus. */
 a {
-    color: var(--brand-ink);
-
-    text-decoration-color:
-        rgba(6, 78, 59, 0.28);
-
+    color: #793e30;
+    text-decoration-color: #af8877;
     text-underline-offset: 0.15em;
 }
 
 a:hover {
-    color: #043d2f;
-
+    color: #532b23;
     text-decoration-color: currentColor;
 }
 
 hr {
-    border-color:
-        rgba(6, 78, 59, 0.13);
-
+    border-color: var(--border);
     opacity: 1;
 }
 
 :focus-visible {
-    outline:
-        3px solid rgba(6, 78, 59, 0.42);
-
+    outline: 3px solid rgba(151, 75, 55, 0.55);
     outline-offset: 3px;
 }
 
-
-/* ==========================================================
-   Responsivitet
-   ========================================================== */
-
+/* Nettbrett og mobil: mindre dekor, same tydelege hierarki. */
 @media (max-width: 991.98px) {
-
     .site-main > .container {
         padding-right: 1rem;
         padding-left: 1rem;
     }
 
     .guide-header-with-antlers {
-        min-height: 10rem;
-
-        padding-right: 11rem;
+        min-height: 9rem;
+        padding-right: 10rem;
     }
 
     .guide-antlers {
         right: 1rem;
-
-        width: 10rem;
-
-        opacity: 0.12;
+        width: 9rem;
+        opacity: 0.14;
     }
 
     .guide-card-header,
     .guide-card-body {
-        padding: 1.25rem;
+        padding: 1.2rem;
     }
 
     .calculate-button {
@@ -990,61 +609,32 @@ hr {
     }
 }
 
-
 @media (max-width: 575.98px) {
-
-    html {
-        font-size: 15px;
-    }
-
     .container {
-        padding-right: 0.85rem;
-        padding-left: 0.85rem;
+        padding-right: 0.9rem;
+        padding-left: 0.9rem;
     }
 
     .guide-header-with-antlers {
         min-height: auto;
-
-        padding-top: 1.6rem;
-        padding-right: 1.4rem;
-        padding-bottom: 1.6rem;
-
-        border-radius: 1rem;
+        padding: 1.45rem 1.3rem;
     }
 
     .guide-header {
-        margin-bottom: 1.75rem !important;
-
-        padding-left: 1.6rem;
-    }
-
-    .guide-header::before {
-        top: 1.4rem;
-        bottom: 1.4rem;
-        left: 0.65rem;
-
-        width: 4px;
+        margin-bottom: 1.5rem !important;
     }
 
     .guide-antlers {
-        top: 0.75rem;
-        right: -1.2rem;
-
-        width: 7.5rem;
-
+        top: 0.7rem;
+        right: -1.5rem;
+        width: 7rem;
         opacity: 0.07;
-
         transform: none;
     }
 
     .guide-header h1 {
-        max-width: calc(100% - 3rem);
-
-        font-size: 2.05rem;
-    }
-
-    .guide-card {
-        border-radius: 0.9rem;
+        max-width: calc(100% - 1rem);
+        font-size: clamp(1.85rem, 8vw, 2.1rem);
     }
 
     .guide-card-header,
@@ -1052,41 +642,40 @@ hr {
         padding: 1rem;
     }
 
-    .remaining-time-card {
+    .remaining-time-card,
+    .frost-warning {
         padding: 1rem;
     }
 
     .remaining-time-value {
-        font-size: 1.5rem;
+        font-size: 1.45rem;
     }
 
     .summary-value {
         font-size: 1.35rem;
     }
 
+    .footer-content {
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .footer-separator {
+        display: none;
+    }
+
     .site-footer {
-        padding-bottom:
-            calc(
-                1.5rem +
-                env(safe-area-inset-bottom)
-            );
+        margin-top: 2rem;
+        padding-bottom: calc(1.6rem + env(safe-area-inset-bottom));
     }
 }
 
-
-/* ==========================================================
-   Redusert rørsle
-   ========================================================== */
-
 @media (prefers-reduced-motion: reduce) {
-
     *,
     *::before,
     *::after {
         scroll-behavior: auto !important;
-
         transition-duration: 0.01ms !important;
-
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
     }
