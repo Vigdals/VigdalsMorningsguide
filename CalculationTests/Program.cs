@@ -15,7 +15,12 @@ var tests = new (string Name, Action Run)[]
     ("Dagleg måleintervall toler 25-timarsdøgn", DailyMeasurementAcrossDst),
     ("Midnatt lagar periodar utan overlapp", MidnightBoundary),
     ("Estimerte Shelly-temperaturar blir merkte", EstimatedTemperature),
-    ("Shelly krev to endepunkt for estimert middel", ShellyMeanTemperature)
+    ("Shelly krev to endepunkt for estimert middel", ShellyMeanTemperature),
+    ("Fersk Shelly-måling under null varslar", FreshShellyFrost),
+    ("Gammal Shelly-måling varslar ikkje", StaleShellyNoFrost),
+    ("MET-prognose innan 48 timar varslar", ForecastFrost),
+    ("Prognose utanfor 48 timar varslar ikkje", ForecastOutsideHorizon),
+    ("Null grader varslar ikkje", NoFalseFrostWarning)
 };
 
 var failures = new List<string>();
@@ -44,6 +49,87 @@ if (failures.Count > 0)
 }
 
 return;
+
+static void FreshShellyFrost()
+{
+    var now = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+    var warning = FrostWarningService.Evaluate(
+        new ShellyMeasurementModel
+        {
+            TemperatureCelsius = -1.5,
+            MeasuredAt = now.AddMinutes(-5),
+            StaleAfterMinutes = 30
+        },
+        [],
+        now);
+    True(warning is not null);
+    Near(-1.5, warning!.CurrentTemperatureCelsius!.Value);
+    True(warning.FirstForecastBelowZeroAtUtc is null);
+}
+
+static void StaleShellyNoFrost()
+{
+    var now = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+    var warning = FrostWarningService.Evaluate(
+        new ShellyMeasurementModel
+        {
+            TemperatureCelsius = -3,
+            MeasuredAt = now.AddMinutes(-31),
+            StaleAfterMinutes = 30
+        },
+        [],
+        now);
+    True(warning is null);
+}
+
+static void ForecastFrost()
+{
+    var now = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+    var first = now.AddHours(4);
+    var warning = FrostWarningService.Evaluate(
+        null,
+        [
+            new ForecastTemperaturePoint { Time = now.AddHours(2), Temperature = 1 },
+            new ForecastTemperaturePoint { Time = first, Temperature = -0.5 },
+            new ForecastTemperaturePoint { Time = now.AddHours(5), Temperature = -2 }
+        ],
+        now);
+    True(warning is not null);
+    True(warning!.FirstForecastBelowZeroAtUtc == first);
+    Near(-2, warning.MinimumForecastTemperatureCelsius!.Value);
+    True(warning.CurrentTemperatureCelsius is null);
+}
+
+static void ForecastOutsideHorizon()
+{
+    var now = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+    var warning = FrostWarningService.Evaluate(
+        null,
+        [
+            new ForecastTemperaturePoint { Time = now.AddMinutes(-1), Temperature = -1 },
+            new ForecastTemperaturePoint { Time = now.AddHours(49), Temperature = -4 }
+        ],
+        now);
+    True(warning is null);
+}
+
+static void NoFalseFrostWarning()
+{
+    var now = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+    var warning = FrostWarningService.Evaluate(
+        new ShellyMeasurementModel
+        {
+            TemperatureCelsius = 0,
+            MeasuredAt = now,
+            StaleAfterMinutes = 30
+        },
+        [
+            new ForecastTemperaturePoint { Time = now.AddHours(1), Temperature = 0 },
+            new ForecastTemperaturePoint { Time = now.AddHours(2), Temperature = double.NaN }
+        ],
+        now);
+    True(warning is null);
+}
 
 static void ConstantDay()
 {
