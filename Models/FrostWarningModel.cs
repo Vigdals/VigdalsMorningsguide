@@ -8,4 +8,8 @@ public sealed class FrostWarningModel
     public double? CurrentTemperatureCelsius { get; init; }
     public DateTimeOffset? FirstForecastBelowZeroAtUtc { get; init; }
     public double? MinimumForecastTemperatureCelsius { get; init; }
+
+    public string? ForecastLocationName { get; init; }
+
+    public bool ForecastIsNearbyProxy { get; init; }
 }
