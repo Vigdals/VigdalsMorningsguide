@@ -26,27 +26,11 @@
                 TimeZoneInfo.FindSystemTimeZoneById("Europe/Oslo"));
 
             <p class="mb-1">
-                <strong>Minusgrader meldt utandørs:</strong>
-                MET varslar ned mot
+                <strong>Minusgrader meldt:</strong>
+                YR varslar ned mot
                 <strong>@minimumTemperature.ToString("0.0") °C</strong>
                 ved @warning.ForecastLocationName innan 48 timar.
-                Første prognosepunkt under null er
-                @firstFrostLocal.ToString("dd.MM 'kl.' HH:mm").
             </p>
-            @if (warning.ForecastIsNearbyProxy)
-            {
-                <p class="small mb-0">
-                    Prognosen gjeld utandørs ved @warning.ForecastLocationName,
-                    ikkje temperaturen inne i skålen. Følg med på Shelly-målinga.
-                </p>
-            }
-            else
-            {
-                <p class="small mb-0">
-                    Prognosen gjeld utandørs ved den valde målestasjonen.
-                    Han er ikkje ei direkte måling av kjøttemperaturen.
-                </p>
-            }
         }
     </aside>
 }
