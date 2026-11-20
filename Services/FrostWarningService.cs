@@ -10,7 +10,6 @@ namespace VigdalsMorningsguide.Services;
 /// </summary>
 public sealed class FrostWarningService
 {
-    private const string ForecastCacheKey = "FrostWarning:Loftesnes";
     private static readonly TimeSpan ForecastHorizon = TimeSpan.FromHours(48);
     private static readonly TimeSpan ForecastCacheLifetime = TimeSpan.FromMinutes(30);
 
@@ -29,48 +28,57 @@ public sealed class FrostWarningService
     }
 
     public async Task<FrostWarningModel?> GetWarningAsync(
+        string? selectedSourceId,
         ShellyMeasurementModel? measurement,
         CancellationToken cancellationToken = default)
     {
-        var forecastPoints =
-            await GetNearbyForecastAsync(cancellationToken);
+        if (TemperatureSourceCatalog.IsRefrigerator(selectedSourceId))
+        {
+            return null;
+        }
+
+        var usesShelly = TemperatureSourceCatalog.IsShelly(selectedSourceId);
+        var station = usesShelly
+            ? WeatherStationCatalog.Find(WeatherStationCatalog.DefaultSourceId)
+            : WeatherStationCatalog.Find(selectedSourceId);
+
+        if (station is null)
+        {
+            return null;
+        }
+
+        var forecastPoints = await GetForecastAsync(station, cancellationToken);
 
         return Evaluate(
-            measurement,
+            usesShelly ? measurement : null,
             forecastPoints,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            station.Name,
+            usesShelly);
     }
 
-    private async Task<IReadOnlyList<ForecastTemperaturePoint>> GetNearbyForecastAsync(
+    private async Task<IReadOnlyList<ForecastTemperaturePoint>> GetForecastAsync(
+        WeatherStationOptionModel station,
         CancellationToken cancellationToken)
     {
+        var cacheKey = $"FrostWarning:{station.SourceId}";
+
         if (_cache.TryGetValue(
-                ForecastCacheKey,
+                cacheKey,
                 out IReadOnlyList<ForecastTemperaturePoint>? cached) &&
             cached is not null)
         {
             return cached;
         }
 
-        // Skålen manglar koordinatar. Loftesnes er berre eit nærliggjande
-        // prognosepunkt, ikkje ein prognose for temperaturen inne i skålen.
-        var source =
-            WeatherStationCatalog.Find(
-                WeatherStationCatalog.DefaultSourceId);
-
-        if (source is null)
-        {
-            return [];
-        }
-
         var forecastLocation =
             new WeatherStationModel
             {
-                SourceId = source.SourceId,
-                Name = source.Name,
-                Latitude = source.Latitude,
-                Longitude = source.Longitude,
-                MetresAboveSeaLevel = source.MetresAboveSeaLevel,
+                SourceId = station.SourceId,
+                Name = station.Name,
+                Latitude = station.Latitude,
+                Longitude = station.Longitude,
+                MetresAboveSeaLevel = station.MetresAboveSeaLevel,
                 DistanceKilometres = 0
             };
 
@@ -84,7 +92,7 @@ public sealed class FrostWarningService
             if (forecast.Count > 0)
             {
                 _cache.Set(
-                    ForecastCacheKey,
+                    cacheKey,
                     forecast,
                     ForecastCacheLifetime);
             }
@@ -116,7 +124,9 @@ public sealed class FrostWarningService
     public static FrostWarningModel? Evaluate(
         ShellyMeasurementModel? measurement,
         IReadOnlyList<ForecastTemperaturePoint> forecastPoints,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        string? forecastLocationName = null,
+        bool forecastIsNearbyProxy = false)
     {
         ArgumentNullException.ThrowIfNull(forecastPoints);
 
@@ -162,7 +172,9 @@ public sealed class FrostWarningService
                 : null,
             MinimumForecastTemperatureCelsius = freezingForecast.Count > 0
                 ? freezingForecast.Min(point => point.Temperature)
-                : null
+                : null,
+            ForecastLocationName = forecastLocationName,
+            ForecastIsNearbyProxy = forecastIsNearbyProxy
         };
     }
 }
