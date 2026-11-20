@@ -31,6 +31,45 @@
         </div>
     </header>
 
+    @if (Model.FrostWarning is { } frostWarning)
+    {
+        <aside class="alert alert-danger frost-warning mb-4"
+               role="alert" aria-labelledby="frost-warning-heading">
+            <h2 id="frost-warning-heading" class="h5 fw-bold mb-2">
+                ⚠ Frostfare for kjøtet
+            </h2>
+            <p class="fw-semibold mb-2">
+                Pass på kjøtet ditt! Så mørninga ikkje stoppar opp grunna frost!
+            </p>
+            @if (frostWarning.CurrentTemperatureCelsius is double currentTemperature)
+            {
+                <p class="mb-2">
+                    <strong>Minusgrader i skålen:</strong>
+                    Siste ferske Shelly-måling er
+                    <strong>@currentTemperature.ToString("0.0") °C</strong>.
+                </p>
+            }
+            @if (frostWarning.FirstForecastBelowZeroAtUtc is DateTimeOffset firstFrost &&
+                 frostWarning.MinimumForecastTemperatureCelsius is double minimumTemperature)
+            {
+                var firstFrostLocal = TimeZoneInfo.ConvertTime(
+                    firstFrost,
+                    TimeZoneInfo.FindSystemTimeZoneById("Europe/Oslo"));
+                <p class="mb-1">
+                    <strong>Minusgrader meldt i nærområdet:</strong>
+                    MET varslar ned mot
+                    <strong>@minimumTemperature.ToString("0.0") °C</strong>
+                    ved Loftesnes innan 48 timar. Første prognosepunkt
+                    under null er @firstFrostLocal.ToString("dd.MM 'kl.' HH:mm").
+                </p>
+                <p class="small mb-0">
+                    Prognosen gjeld utandørs ved Loftesnes, ikkje temperaturen
+                    inne i skålen. Følg med på Shelly-målinga.
+                </p>
+            }
+        </aside>
+    }
+
     <section class="card guide-card mb-4" aria-labelledby="input-heading">
 
         <div class="guide-card-header">
