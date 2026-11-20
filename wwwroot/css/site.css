@@ -545,6 +545,16 @@ input[type="number"] {
     background: #f0d8cc !important;
 }
 
+.badge.text-bg-secondary {
+    color: #fff !important;
+    border: 1px solid #524b45;
+    background: #615851 !important;
+}
+
+.text-warning-emphasis {
+    color: #834932 !important;
+}
+
 .field-validation-error,
 .validation-summary-errors {
     color: var(--danger);
