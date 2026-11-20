@@ -43,7 +43,8 @@ public sealed class FrostService
         double targetDegreeDays,
         WeatherStationModel station,
         DateTime? refrigeratedAt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        double refrigeratorTemperatureCelsius = 4.0)
     {
         ArgumentNullException.ThrowIfNull(station);
 
@@ -231,7 +232,8 @@ public sealed class FrostService
             _options.MeasurementIntervalMinutes,
             _options.MinimumCoveragePercent,
             _options.MaximumDaysBack,
-            nowUtc);
+            nowUtc,
+            refrigeratorTemperatureCelsius);
     }
 
     private static List<TemperatureMeasurementModel> ExtractMeasurements(
